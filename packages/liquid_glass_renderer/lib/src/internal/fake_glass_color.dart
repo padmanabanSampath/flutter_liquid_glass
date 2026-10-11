@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+import 'package:liquid_glass_renderer/src/sea_glass.dart';
 import 'package:meta/meta.dart';
 
 /// Affine tint-over-backdrop followed by saturation, expressed as Flutter's
@@ -145,10 +146,15 @@ List<double> fakeGlassSeaGlassMatrix({
   required Color body,
   double saturation = 1,
   double opacity = 1,
+  double shortSide = 64,
 }) {
   const luminance = [0.2126, 0.7152, 0.0722];
-  final density = body.a.clamp(0.0, 1.0);
-  final scatter = finish.effectiveScatter;
+  final sizeResponse = seaGlassSizeResponse(finish, shortSide);
+  final density = body.a.clamp(0.0, 1.0) * sizeResponse.path;
+  final scatter = (finish.effectiveScatter * sizeResponse.scatter).clamp(
+    0.0,
+    1.0,
+  );
   final bodyColor = [body.r, body.g, body.b];
   final result = <double>[];
   for (var row = 0; row < 3; row++) {
@@ -247,6 +253,7 @@ ImageFilter? fakeGlassBackdropFilter(
       body: appearance.tint,
       saturation: appearance.saturation,
       opacity: visibility,
+      shortSide: shortSide,
     );
     final strength = seaGlass.effectiveStrength;
     transferMatrix = [

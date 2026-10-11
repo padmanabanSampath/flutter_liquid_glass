@@ -4,6 +4,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/painting.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_appearance.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_settings.dart';
+import 'package:meta/meta.dart';
 
 /// The tumbled, frosted surface of sea glass.
 ///
@@ -38,6 +39,7 @@ class SeaGlassFinish with Equatable {
     this.grainSize = 1.4,
     this.sparkle = 0.35,
     this.pitting = 0.9,
+    this.stochasticFrost = true,
   });
 
   /// No sea glass: the regular liquid-glass face.
@@ -49,7 +51,8 @@ class SeaGlassFinish with Equatable {
       grain = 0.5,
       grainSize = 1.4,
       sparkle = 0.35,
-      pitting = 0.9;
+      pitting = 0.9,
+      stochasticFrost = true;
 
   /// A heavily tumbled, milkier pebble: more scatter, coarser grain and a
   /// brighter rim. Pair it with a larger [LiquidGlassSettings.frost].
@@ -61,7 +64,8 @@ class SeaGlassFinish with Equatable {
       grain = 0.7,
       grainSize = 1.8,
       sparkle = 0.45,
-      pitting = 1.6;
+      pitting = 1.6,
+      stochasticFrost = true;
 
   /// A barely tumbled shard that is still mostly clear.
   const SeaGlassFinish.clear()
@@ -72,7 +76,8 @@ class SeaGlassFinish with Equatable {
       grain = 0.3,
       grainSize = 1.2,
       sparkle = 0.2,
-      pitting = 0.5;
+      pitting = 0.5,
+      stochasticFrost = true;
 
   /// Restores a finish produced by [toJson].
   factory SeaGlassFinish.fromJson(Object? json) {
@@ -89,6 +94,8 @@ class SeaGlassFinish with Equatable {
       grainSize: number('grainSize', defaults.grainSize),
       sparkle: number('sparkle', defaults.sparkle),
       pitting: number('pitting', defaults.pitting),
+      stochasticFrost:
+          json['stochasticFrost'] as bool? ?? defaults.stochasticFrost,
     );
   }
 
@@ -134,6 +141,18 @@ class SeaGlassFinish with Equatable {
   /// transmission on top of [LiquidGlassSettings.frost]. `0` disables it.
   final double pitting;
 
+  /// Whether the glass pass renders [LiquidGlassSettings.frost] itself, by
+  /// scattering its backdrop samples the way the pits scatter light,
+  /// instead of running a separate blur pass.
+  ///
+  /// Frosted glass blurs because its rough surface sends each ray a random
+  /// way, so the frost comes out finely grained, as real sea glass looks.
+  /// It skips the blur pass's intermediate textures and render passes, at
+  /// the cost of twelve backdrop samples per glass pixel; it is the lean
+  /// choice for the light frost sea glass uses. Turn it off for a smooth
+  /// Gaussian frost, or for a very heavy frost over a large area.
+  final bool stochasticFrost;
+
   /// [strength] clamped to `0` to `1`.
   double get effectiveStrength => strength.clamp(0.0, 1.0);
 
@@ -175,6 +194,7 @@ class SeaGlassFinish with Equatable {
     double? grainSize,
     double? sparkle,
     double? pitting,
+    bool? stochasticFrost,
   }) => SeaGlassFinish(
     strength: strength ?? this.strength,
     depth: depth ?? this.depth,
@@ -184,6 +204,7 @@ class SeaGlassFinish with Equatable {
     grainSize: grainSize ?? this.grainSize,
     sparkle: sparkle ?? this.sparkle,
     pitting: pitting ?? this.pitting,
+    stochasticFrost: stochasticFrost ?? this.stochasticFrost,
   );
 
   /// A soft shadow tinted by the glass, as colored glass casts on a light
@@ -227,6 +248,7 @@ class SeaGlassFinish with Equatable {
     'grainSize': grainSize,
     'sparkle': sparkle,
     'pitting': pitting,
+    'stochasticFrost': stochasticFrost,
   };
 
   @override
@@ -239,7 +261,22 @@ class SeaGlassFinish with Equatable {
     grainSize,
     sparkle,
     pitting,
+    stochasticFrost,
   ];
+}
+
+/// How a shape's size scales a sea glass [finish]: larger glass behaves like
+/// thicker material, as Apple's does, absorbing more of its body color
+/// (`path`) and scattering light more softly (`scatter`). Mirrors
+/// `seaGlassSizeResponse` in `sea_glass.glsl`.
+@internal
+({double path, double scatter}) seaGlassSizeResponse(
+  SeaGlassFinish finish,
+  double shortSide,
+) {
+  final x = ((shortSide / 2 / finish.effectiveDepth - 1) / 3).clamp(0.0, 1.0);
+  final size = x * x * (3 - 2 * x);
+  return (path: 0.85 + 0.35 * size, scatter: 0.9 + 0.4 * size);
 }
 
 /// Body colors of real sea glass.

@@ -291,7 +291,7 @@ Sea glass is glass the sea has tumbled into a frosted pebble. It stays
 translucent, but its surface is pitted into a fine sugary frost, its rounded
 rim is paler than its body, and the glass itself is colored throughout, so it
 is deepest in color where it is thickest. Compared to iOS 27 glass it is
-flatter: a shallow lens, no inner shadow, and a soft glint.
+flatter: a gentle pebble lens, no inner shadow, and a soft glint.
 
 Start from the `seaGlass` preset and give each shape a body color:
 
@@ -338,6 +338,7 @@ The surface is a `SeaGlassFinish` on the layer's settings
 | `grain`, `grainSize` | The fine sugary texture of the pits. |
 | `sparkle` | Tiny glints where single pits catch the light. |
 | `pitting` | How far the pits scatter the backdrop, in logical pixels, on top of `frost`. |
+| `stochasticFrost` | Renders `frost` in the glass pass by scattering samples, instead of a blur pass (default `true`, see below). |
 
 `SeaGlassFinish()` keeps the backdrop readable. `SeaGlassFinish.frosted()` is
 a milkier pebble (pair it with a larger `frost`, around `10`) and
@@ -345,12 +346,59 @@ a milkier pebble (pair it with a larger `frost`, around `10`) and
 returns a soft shadow tinted by the body, as colored glass casts on a light
 surface; keep its `elevation` small for flat UI.
 
-The frost is anchored to the center of the layer's glass, so it moves with a
-single shape. The finish costs two uniforms and some per-pixel math only while
-it is enabled; `SeaGlassFinish.none()`, the default, leaves the renderer
-exactly as without it. [FakeGlass](#fakeglass) approximates the body at its
-mean thickness with its color filter and draws the rim, grain and sparkles in
-its surface pass.
+### How sea glass differs from clear glass
+
+Apple's Liquid Glass is smooth, clear glass. Sea glass keeps its behavior
+(one shared backdrop sample, lensing, materializing with light rather than
+opacity, merging like droplets, a glow under the finger) but its physics
+differ:
+
+- **Refraction.** A pebble's face is curved all over, not flat with a bevel,
+  so the `seaGlass` preset turns `refractionFitsShape` off: small shapes
+  curve across the whole face and larger ones keep a 36 pt curved shoulder,
+  so they refract more, as Apple's thicker glass does. The frost and the pits
+  then smear what the lens bends.
+- **Thickness.** Larger glass behaves like thicker material: a large card
+  absorbs more of its body color and scatters light more softly than a
+  small button with the same finish.
+- **Lighting.** A rough surface has no crisp highlight. The glint is dimmed,
+  the frosted rim glows on the side facing the light, and the pits are tiny
+  facets that glint when they face it.
+- **Merging.** Shapes in a `LiquidGlassBlendGroup` fuse like droplets, as on
+  iOS. Between two pebbles the bridge is thin glass, so it is paler and
+  frostier than either body, and the two body colors blend across it. Each
+  shape's frost is anchored to that shape, so it moves with the shape and
+  cross-fades without a seam across a bridge.
+- **Interaction.** `LiquidStretch.seaGlass` gives a solid pebble's give:
+  less swell when pressed, about half the stretch and more resistance than
+  Apple's gel-like glass.
+
+### Light direction
+
+`LiquidGlassSettings.lightAngle` turns the light, in radians clockwise from
+straight above. The glint, the dark border, the inner shadow, the sea glass
+rim glow and the sparkles all follow it, and as it moves the sparkles
+twinkle. `0` is the overhead light of iOS 27's resting glass. Apple moves some
+highlights with the device; feed the device's tilt (for example from a
+gyroscope) or a gesture into `lightAngle` to do the same. It is one uniform,
+so changing it never re-renders the geometry.
+
+### Cost
+
+The finish adds no textures. Its per-pixel work runs only while it is
+enabled; `SeaGlassFinish.none()`, the default, leaves the renderer exactly as
+without it.
+
+With `stochasticFrost` (the default), the glass pass renders `frost` itself
+with twelve backdrop samples spread over a disc at a random turn per pixel,
+the way the pits scatter light. A sea glass layer then needs no blur pass, so
+it skips that pass's intermediate textures and the command buffers it costs
+(about four per frame on Metal, regardless of radius). The frost comes out
+finely grained, as real frosted glass does. For a very heavy frost over a
+large area, turn it off to use the Gaussian blur pass again.
+
+[FakeGlass](#fakeglass) approximates the body at its mean thickness with its
+color filter and draws the rim, grain and sparkles in its surface pass.
 
 ## Refraction
 
@@ -563,9 +611,10 @@ flutter run --enable-impeller --enable-flutter-gpu
 ```
 
 The playground has an iOS-style tab bar and toolbar, blending and color
-scenes, the text loupe, a sea glass quick settings panel, every preset in
-light and dark, the Liquid Glass slider, sea glass finish controls, full/fake
-switching and several backdrops. Settings you tune can be
+scenes, the text loupe, a sea glass quick settings panel (the color scene
+turns into merging sea glass pebbles under the Sea Glass style), every preset
+in light and dark, the Liquid Glass slider, sea glass finish controls, a light
+angle, full/fake switching and several backdrops. Settings you tune can be
 saved as custom presets.
 
 ## Limitations

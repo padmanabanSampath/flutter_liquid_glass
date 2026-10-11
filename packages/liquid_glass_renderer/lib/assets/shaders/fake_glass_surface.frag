@@ -68,7 +68,11 @@ layout(location = 0) out vec4 fragColor;
 vec4 seaGlassOverlay(vec2 position, float inward, float facing) {
   float strength = clamp(uSeaGlassBody.x, 0.0, 1.0);
   float thickness = seaGlassThickness(inward, uSeaGlassBody.y);
-  float density = clamp(uSeaGlassColor.a, 0.0, 1.0);
+  vec2 sizeResponse = seaGlassSizeResponse(
+      0.5 * min(uSize.x, uSize.y),
+      uSeaGlassBody.y
+  );
+  float density = clamp(uSeaGlassColor.a, 0.0, 1.0) * sizeResponse.x;
   vec3 bodyColor = clamp(uSeaGlassColor.rgb, vec3(0.02), vec3(1.0));
   vec3 pastel = mix(vec3(1.0), pow(bodyColor, vec3(0.4 * density)), 0.85);
   // The filter colors the face as if it were evenly thick; the thin rim
@@ -90,7 +94,12 @@ vec4 seaGlassOverlay(vec2 position, float inward, float facing) {
       : vec4(vec3(0.0), -grain);
   overlay = speck + overlay * (1.0 - speck.a);
 
-  float sparkle = seaGlassSparkle(position, grainSize, uPixelSize) *
+  float sparkle = seaGlassSparkle(
+      position,
+      grainSize,
+      uPixelSize,
+      normalize(uLightDirection + vec2(0.00001))
+  ) *
       clamp(uSeaGlassSurface.z, 0.0, 1.0);
   overlay = vec4(vec3(sparkle), sparkle) + overlay * (1.0 - sparkle);
   return overlay * strength;

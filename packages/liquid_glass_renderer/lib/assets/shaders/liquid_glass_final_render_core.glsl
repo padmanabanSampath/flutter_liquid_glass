@@ -72,6 +72,13 @@ uniform vec4 uColorModelParams[24];
 // glass renders exactly as without it.
 uniform vec4 uSeaGlassBody;
 uniform vec4 uSeaGlassSurface;
+// Matte-space boxes of the layer's shapes (center xy, half extents zw, in
+// device pixels) the sea glass frost anchors to, so it moves with each
+// shape. A negative half extent ends the list.
+uniform vec4 uSeaGlassShapes[16];
+// Radius in device pixels of the disc the sea glass frost scatters its
+// backdrop samples over, in place of a blur pass; 0 without.
+uniform float uSeaGlassFrostRadius;
 
 vec4 colorModelSlot(int slot, int field) {
     return uColorModelParams[slot * 8 + field];
@@ -524,6 +531,72 @@ vec3 applySpecularHighlights(
 const float kSeaGlassSparkleLuminance = 1.3;
 // Share of the full body color the paper-thin rim still carries.
 const float kSeaGlassRimPath = 0.3;
+// Grains over which the frost of two merged shapes cross-fades in their
+// bridge.
+const float kSeaGlassAnchorFade = 4.0;
+// Backdrop samples of the scattered frost, the refracted one included.
+const int kSeaGlassFrostTaps = 12;
+// The golden angle, which spreads the taps evenly over the disc.
+const float kGoldenAngle = 2.39996323;
+
+// The frost belongs to the shape whose box p lies deepest in. Where a
+// second box is nearly as close, as in the bridge of two merged shapes,
+// both frosts cross-fade instead of meeting at a seam. Returns the second
+// shape's weight; first and second receive the two centers and halfMinor
+// the owners' half short side, blended the same way.
+float seaGlassOwners(
+    vec2 p,
+    out vec2 first,
+    out vec2 second,
+    out float halfMinor
+) {
+    float firstDistance = 1e9;
+    float secondDistance = 1e9;
+    float firstHalfMinor = 0.0;
+    float secondHalfMinor = 0.0;
+    first = uMaterialCenter;
+    second = uMaterialCenter;
+    for (int i = 0; i < 16; i++) {
+        vec4 box = uSeaGlassShapes[i];
+        if (box.z < 0.0) {
+            break;
+        }
+        vec2 q = abs(p - box.xy) - box.zw;
+        float d = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0);
+        float boxHalfMinor = min(box.z, box.w);
+        if (d < firstDistance) {
+            secondDistance = firstDistance;
+            second = first;
+            secondHalfMinor = firstHalfMinor;
+            firstDistance = d;
+            first = box.xy;
+            firstHalfMinor = boxHalfMinor;
+        } else if (d < secondDistance) {
+            secondDistance = d;
+            second = box.xy;
+            secondHalfMinor = boxHalfMinor;
+        }
+    }
+    float weight = 0.5 * (1.0 - smoothstep(
+        0.0,
+        kSeaGlassAnchorFade * uSeaGlassGrainSize,
+        secondDistance - firstDistance
+    ));
+    halfMinor = mix(firstHalfMinor, secondHalfMinor, weight);
+    return weight;
+}
+
+// The pits of the owning shapes, cross-faded with their variance kept so
+// the grain does not flatten in a bridge.
+vec3 seaGlassOwnedPits(vec2 p, vec2 first, vec2 second, float weight) {
+    vec3 pits = seaGlassPits(p - first, uSeaGlassGrainSize);
+    if (weight > 0.001) {
+        vec3 other = seaGlassPits(p - second, uSeaGlassGrainSize);
+        pits = (pits * (1.0 - weight) + other * weight) /
+            sqrt((1.0 - weight) * (1.0 - weight) + weight * weight);
+    }
+    return pits;
+}
 
 // The sea glass face over the refracted backdrop.
 //
@@ -542,17 +615,22 @@ vec3 seaGlassFace(
     float inwardDistance,
     vec2 surfaceNormal,
     float grain,
+    float halfMinor,
     out vec3 transmitted
 ) {
     float thickness = seaGlassThickness(inwardDistance, uSeaGlassDepth);
+    vec2 sizeResponse = seaGlassSizeResponse(halfMinor, uSeaGlassDepth);
     float density = clamp(body.a, 0.0, 1.0);
     vec3 bodyColor = clamp(body.rgb, vec3(0.02), vec3(1.0));
     vec3 transmittance = pow(
         bodyColor,
-        vec3(density * mix(kSeaGlassRimPath, 1.0, thickness))
+        vec3(
+            density * sizeResponse.x *
+                mix(kSeaGlassRimPath, 1.0, thickness)
+        )
     );
     float scatter = clamp(
-        uSeaGlassScatter * mix(1.6, 1.0, thickness),
+        uSeaGlassScatter * sizeResponse.y * mix(1.6, 1.0, thickness),
         0.0,
         1.0
     );
@@ -751,10 +829,22 @@ void main() {
     // Sea glass pits break up the backdrop seen through the face. Like the
     // bevel, they settle with visibility.
     vec3 seaGlassPitSample = vec3(0.0);
+    vec2 seaGlassFirst = uMaterialCenter;
+    vec2 seaGlassSecond = uMaterialCenter;
+    float seaGlassSecondWeight = 0.0;
+    float seaGlassHalfMinor = 0.0;
     if (uSeaGlassStrength > 0.0) {
-        seaGlassPitSample = seaGlassPits(
-            matteCoord - uMaterialCenter,
-            uSeaGlassGrainSize
+        seaGlassSecondWeight = seaGlassOwners(
+            matteCoord,
+            seaGlassFirst,
+            seaGlassSecond,
+            seaGlassHalfMinor
+        );
+        seaGlassPitSample = seaGlassOwnedPits(
+            matteCoord,
+            seaGlassFirst,
+            seaGlassSecond,
+            seaGlassSecondWeight
         );
         displacement += seaGlassPitSample.xy * uSeaGlassPitting *
             uSeaGlassStrength * appearanceVisibility;
@@ -812,6 +902,41 @@ void main() {
                 uBackgroundTexture,
                 mirrorBackgroundUV(refractedUV, invUSize)
             );
+        }
+        if (uSeaGlassFrostRadius > 0.0) {
+            // The rough surface sends each ray a random way: the frost is
+            // the mean of samples spread over a disc (a Vogel spiral, at a
+            // random turn per pixel, anchored to the glass so the grain
+            // moves with it). Like the bevel, it settles with visibility.
+            float radius = uSeaGlassFrostRadius * appearanceVisibility;
+            float turn = 6.2831853 * seaGlassHash(
+                floor(matteCoord - seaGlassFirst)
+            );
+            vec2 direction = vec2(cos(turn), sin(turn));
+            const vec2 kGoldenTurn = vec2(
+                cos(kGoldenAngle),
+                sin(kGoldenAngle)
+            );
+            vec4 frost = refractColor;
+            for (int i = 1; i < kSeaGlassFrostTaps; i++) {
+                direction = vec2(
+                    direction.x * kGoldenTurn.x - direction.y * kGoldenTurn.y,
+                    direction.x * kGoldenTurn.y + direction.y * kGoldenTurn.x
+                );
+                vec2 offset = direction * radius *
+                    sqrt(float(i) / float(kSeaGlassFrostTaps));
+                frost += texture(
+                    uBackgroundTexture,
+                    mirrorBackgroundUV(
+                        screenUV + mirrorIntoBackdrop(
+                            sourceOffset + offset,
+                            matteCoord
+                        ) * invUSize,
+                        invUSize
+                    )
+                );
+            }
+            refractColor = frost / float(kSeaGlassFrostTaps);
         }
         if (uSoften > 0.5) {
             // The offset scales with visibility, so hidden glass collapses
@@ -1003,6 +1128,7 @@ void main() {
             max(signedEdgeDistance, 0.0),
             surfaceNormal,
             seaGlassPitSample.z,
+            seaGlassHalfMinor,
             seaGlassTransmitted
         );
         baseColor = mix(baseColor, seaGlassBase, uSeaGlassStrength);
@@ -1024,10 +1150,24 @@ void main() {
     );
     if (uSeaGlassStrength > 0.0 && uSeaGlassSparkle > 0.0) {
         float sparkle = seaGlassSparkle(
-            matteCoord - uMaterialCenter,
+            matteCoord - seaGlassFirst,
             uSeaGlassGrainSize,
-            0.75
-        ) * uSeaGlassSparkle * uSeaGlassStrength;
+            0.75,
+            uLightDirection
+        );
+        if (seaGlassSecondWeight > 0.001) {
+            sparkle = mix(
+                sparkle,
+                seaGlassSparkle(
+                    matteCoord - seaGlassSecond,
+                    uSeaGlassGrainSize,
+                    0.75,
+                    uLightDirection
+                ),
+                seaGlassSecondWeight
+            );
+        }
+        sparkle *= uSeaGlassSparkle * uSeaGlassStrength;
         litColor = mix(
             litColor,
             vec3(kSeaGlassSparkleLuminance),

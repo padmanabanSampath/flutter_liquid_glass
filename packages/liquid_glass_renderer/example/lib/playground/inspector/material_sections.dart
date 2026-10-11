@@ -98,6 +98,15 @@ class MaterialSections extends StatelessWidget {
                   onChanged: (v) => edit(settings.copyWith(contourStrength: v)),
                 ),
                 SliderRow(
+                  title: 'Light Angle',
+                  value: settings.lightAngle * 180 / math.pi,
+                  min: -180,
+                  max: 180,
+                  format: (v) => '${v.round()}°',
+                  onChanged: (v) =>
+                      edit(settings.copyWith(lightAngle: v * math.pi / 180)),
+                ),
+                SliderRow(
                   title: 'Inner Shadow',
                   value: settings.bevelShadowStrength,
                   min: 0,
@@ -199,6 +208,11 @@ class _SeaGlassSection extends StatelessWidget {
             max: 4,
             format: _points,
             onChanged: (v) => onChanged(finish.copyWith(pitting: v)),
+          ),
+          SwitchRow(
+            title: 'Scattered Frost',
+            value: finish.stochasticFrost,
+            onChanged: (v) => onChanged(finish.copyWith(stochasticFrost: v)),
           ),
         ],
       ],

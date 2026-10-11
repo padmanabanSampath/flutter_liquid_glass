@@ -424,6 +424,17 @@ void main() {
     await tester.tap(find.text('Wi-Fi'));
     await tester.pumpAndSettle();
     expect(tile('Wi-Fi').appearance, isNull);
+    expect(find.text('Light Angle'), findsOneWidget);
+    expect(find.text('Scattered Frost'), findsOneWidget);
+
+    // Under the sea glass style the color scene merges sea glass pebbles.
+    await tester.tap(find.text('Colors'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cobalt'), findsOneWidget);
+    expect(
+      tile('Cobalt').appearance,
+      const LiquidGlassAppearance.seaGlass(color: SeaGlassColors.cobalt),
+    );
     expect(tester.takeException(), isNull);
   });
 

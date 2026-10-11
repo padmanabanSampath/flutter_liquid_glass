@@ -148,13 +148,13 @@ class _Tile extends StatelessWidget {
       label: compact ? label : null,
       child: GestureDetector(
         onTap: onTap,
-        child: LiquidStretch(
+        child: LiquidStretch.seaGlass(
           child: LiquidGlass(
             shape: const LiquidRoundedSuperellipse(
               borderRadius: _tileHeight / 2,
             ),
             appearance: active ? SeaGlassScene.activeAppearance(context) : null,
-            child: GlowContent(
+            child: _FrostedGlow(
               child: SizedBox(
                 height: _tileHeight,
                 child: compact
@@ -203,6 +203,23 @@ class _Tile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The touch glow of a frosted tile: the frost spreads the light through the
+/// body, so it is wider and softer than on clear glass.
+class _FrostedGlow extends StatelessWidget {
+  const _FrostedGlow({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => GlassGlowLayer(
+    child: GlassGlow(
+      glowColor: const Color(0x33FFFFFF),
+      glowRadius: 1.6,
+      child: child,
+    ),
+  );
 }
 
 /// A brightness slider: a teal glass bar for the level and a frosted bar

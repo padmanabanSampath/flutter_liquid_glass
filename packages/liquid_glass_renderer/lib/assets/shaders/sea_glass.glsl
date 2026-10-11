@@ -6,8 +6,9 @@
 // moves with it, in the caller's pixel unit. Everything is explicitly highp:
 // FakeGlass is mediump, where the hash loses its randomness.
 
-// Lit cells per sparkle cell; each cell is four grains wide.
-const float kSeaGlassSparkleDensity = 0.22;
+// Share of sparkle cells holding a pit facet; each cell is four grains
+// wide. Only the facets turned toward the light glint.
+const float kSeaGlassSparkleDensity = 0.45;
 
 // "Hash without Sine" (Dave Hoskins, MIT): stable in highp on every
 // backend, unlike sin()-based hashes whose precision varies between GPUs.
@@ -52,13 +53,16 @@ highp vec3 seaGlassPits(highp vec2 p, highp float grainSize) {
     );
 }
 
-// Tiny glints where single pits face the light: at most one per cell, with
-// a random brightness, in a fraction of the cells. minRadius keeps a glint
-// at least that many units wide (about one physical pixel).
+// Tiny glints where single pits face the light: at most one facet per
+// cell, in a fraction of the cells, each tilted a random way. A facet
+// glints as it turns toward lightDirection (the way the light travels), so
+// moving the light makes the frost twinkle. minRadius keeps a glint at
+// least that many units wide (about one physical pixel).
 highp float seaGlassSparkle(
     highp vec2 p,
     highp float grainSize,
-    highp float minRadius
+    highp float minRadius,
+    highp vec2 lightDirection
 ) {
     highp float cellSize = grainSize * 4.0;
     highp vec2 cell = floor(p / cellSize);
@@ -74,7 +78,25 @@ highp float seaGlassSparkle(
     highp float radius = max(grainSize * 0.6, minRadius);
     highp float falloff = max(1.0 - length(p - center) / radius, 0.0);
     highp float energy = pick / kSeaGlassSparkleDensity;
-    return falloff * falloff * energy * energy;
+    highp float tilt = 6.2831853 * seaGlassHash(cell + vec2(13.1, 47.7));
+    highp float facing = max(
+        dot(vec2(cos(tilt), sin(tilt)), -lightDirection),
+        0.0
+    );
+    return min(
+        falloff * falloff * energy * facing * facing * facing * 2.5,
+        1.0
+    );
+}
+
+// Larger glass behaves like thicker material, as Apple's does: it absorbs
+// more of its body color and scatters light more softly. x scales the
+// body's path and y the scatter, by the shape's half short side relative to
+// the pebble's depth: a 64 pt tile with the default 18 pt depth is near 1,
+// a large card thicker. Mirrored by seaGlassSizeResponse in Dart.
+vec2 seaGlassSizeResponse(float halfMinor, float depth) {
+    float size = smoothstep(1.0, 4.0, halfMinor / max(depth, 0.001));
+    return vec2(mix(0.85, 1.2, size), mix(0.9, 1.3, size));
 }
 
 // Parabolic thickness of a rounded pebble: 0 at the silhouette, 1 from

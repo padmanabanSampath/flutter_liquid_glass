@@ -6,6 +6,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'package:liquid_glass_renderer/src/internal/fake_glass_color.dart';
+import 'package:liquid_glass_renderer/src/rendering/liquid_glass_layer.dart';
+import 'package:liquid_glass_renderer/src/sea_glass.dart';
 
 import 'shared.dart';
 
@@ -142,7 +144,9 @@ void main() {
         strength: .5,
         depth: 30,
         grainSize: 2.5,
+        stochasticFrost: false,
       );
+      expect(finish.stochasticFrost, isFalse);
       expect(finish.strength, .5);
       expect(finish.depth, 30);
       expect(finish.grainSize, 2.5);
@@ -161,6 +165,17 @@ void main() {
       final tinted = shadows.first.color;
       expect(tinted.b, greaterThan(tinted.r));
       expect(shadows.first.offset.dy, greaterThan(0));
+    });
+
+    test('larger shapes are thicker glass', () {
+      const finish = SeaGlassFinish();
+      final small = seaGlassSizeResponse(finish, 36);
+      final tile = seaGlassSizeResponse(finish, 64);
+      final card = seaGlassSizeResponse(finish, 200);
+      expect(small, (path: .85, scatter: .9));
+      expect(tile.path, inExclusiveRange(small.path, card.path));
+      expect(card.path, closeTo(1.2, 1e-9));
+      expect(card.scatter, closeTo(1.3, 1e-9));
     });
 
     test('the palette is opaque', () {
@@ -183,6 +198,8 @@ void main() {
       expect(settings.seaGlassFinish, const SeaGlassFinish());
       expect(settings.bevelShadowStrength, 0);
       expect(settings.refractionAmount, lessThan(20));
+      // A pebble's whole face curves instead of a bevel fitted to the shape.
+      expect(settings.refractionFitsShape, isFalse);
       expect(settings.frost, greaterThan(0));
       expect(
         LiquidGlassSettings.seaGlass(
@@ -206,6 +223,37 @@ void main() {
       );
       expect(LiquidGlassSettings.fromJson(disabled.toJson()), disabled);
     });
+  });
+
+  group('lightAngle', () {
+    test('the default is the overhead light, exactly', () {
+      expect(const LiquidGlassSettings().lightAngle, 0);
+      expect(const LiquidGlassSettings().lightDirection, const Offset(0, 1));
+      expect(
+        const LiquidGlassSettings().toJson().containsKey('lightAngle'),
+        isFalse,
+      );
+    });
+
+    test('turns the light clockwise and round-trips', () {
+      const fromRight = LiquidGlassSettings(lightAngle: math.pi / 2);
+      expect(fromRight.lightDirection.dx, closeTo(-1, 1e-12));
+      expect(fromRight.lightDirection.dy, closeTo(0, 1e-12));
+      expect(LiquidGlassSettings.fromJson(fromRight.toJson()), fromRight);
+      expect(
+        const LiquidGlassSettings().copyWith(lightAngle: 1).lightAngle,
+        1,
+      );
+      expect(fromRight, isNot(const LiquidGlassSettings()));
+    });
+  });
+
+  test('sea glass stretch is stiffer than the default', () {
+    const glass = LiquidStretch(child: SizedBox());
+    const pebble = LiquidStretch.seaGlass(child: SizedBox());
+    expect(pebble.stretch, lessThan(glass.stretch));
+    expect(pebble.interactionScale, lessThan(glass.interactionScale));
+    expect(pebble.resistance, greaterThan(glass.resistance));
   });
 
   test('sea glass appearance carries the body color as its tint', () {
@@ -249,16 +297,18 @@ void main() {
 
     test('the body filters white to its color at mean thickness', () {
       const body = SeaGlassColors.cobalt;
+      // A shape twice the default depth across has the smallest response.
       final out = apply(
         fakeGlassSeaGlassMatrix(
           finish: const SeaGlassFinish(scatter: 0),
           body: body,
+          shortSide: 36,
         ),
         [1, 1, 1],
       );
-      expect(out[0], closeTo(math.pow(body.r, .8), 1e-9));
-      expect(out[1], closeTo(math.pow(body.g, .8), 1e-9));
-      expect(out[2], closeTo(math.pow(body.b, .8), 1e-9));
+      expect(out[0], closeTo(math.pow(body.r, .8 * .85), 1e-9));
+      expect(out[1], closeTo(math.pow(body.g, .8 * .85), 1e-9));
+      expect(out[2], closeTo(math.pow(body.b, .8 * .85), 1e-9));
     });
 
     test('scatter makes the glass glow over black', () {
@@ -291,6 +341,83 @@ void main() {
         isNotNull,
       );
     });
+  });
+
+  group('scattered frost', () {
+    RenderLiquidGlassLayer layerOf(WidgetTester tester) =>
+        tester.allRenderObjects.whereType<RenderLiquidGlassLayer>().first;
+
+    Future<RenderLiquidGlassLayer> pumpLayer(
+      WidgetTester tester,
+      LiquidGlassSettings settings,
+    ) async {
+      await _renderBytes(
+        tester,
+        _scene(settings, const LiquidGlassAppearance.seaGlass()),
+      );
+      return layerOf(tester);
+    }
+
+    testWidgets(
+      'replaces the blur pass under a sea glass finish',
+      (tester) async {
+        final seaGlass = LiquidGlassSettings.seaGlass(frost: 6);
+        var layer = await pumpLayer(tester, seaGlass);
+        expect(layer.frostsInShader, isTrue);
+        expect(layer.blurPassSigma, 0);
+
+        // Opting out, disabling the finish and visible dispersion all keep
+        // the Gaussian blur pass.
+        for (final settings in [
+          seaGlass.copyWith(
+            seaGlassFinish: const SeaGlassFinish(stochasticFrost: false),
+          ),
+          seaGlass.copyWith(seaGlassFinish: const SeaGlassFinish.none()),
+          seaGlass.copyWith(dispersion: .5),
+        ]) {
+          layer = await pumpLayer(tester, settings);
+          expect(layer.frostsInShader, isFalse, reason: '$settings');
+          expect(layer.blurPassSigma, 6, reason: '$settings');
+        }
+      },
+      skip: skipProperGlassTests,
+    );
+
+    testWidgets(
+      'blurs the backdrop seen through the glass',
+      (tester) async {
+        Future<double> edgeMean(double frost) async {
+          final pixel = await _render(
+            tester,
+            _scene(
+              _flat(
+                _bodyOnly.copyWith(scatter: 0),
+              ).copyWith(frost: frost),
+              const LiquidGlassAppearance.seaGlass(color: Color(0x00FFFFFF)),
+              backdrop: const Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: ColoredBox(color: Colors.black)),
+                  Expanded(child: ColoredBox(color: Colors.white)),
+                ],
+              ),
+            ),
+          );
+          // Just left of the split, over black.
+          final samples = [
+            for (var y = 50.0; y < 90; y += 2)
+              for (var x = 114.0; x < 118; x += .5) _luminance(pixel(x, y)),
+          ];
+          return samples.reduce((a, b) => a + b) / samples.length;
+        }
+
+        final sharp = await edgeMean(0);
+        final frosted = await edgeMean(6);
+        expect(sharp, lessThan(5));
+        expect(frosted, greaterThan(40));
+      },
+      skip: skipProperGlassTests,
+    );
   });
 
   group('rendering', () {
@@ -338,10 +465,20 @@ void main() {
           ),
         );
         final center = pixel(120, 70);
-        // Over white the full-thickness face is the body color itself.
-        expect(center[0], closeTo(0x2E, 6));
-        expect(center[1], closeTo(0x5A, 6));
-        expect(center[2], closeTo(0xD2, 6));
+        // Over white the full-thickness face is the body color, deepened
+        // by the tile's size like the shader's size response.
+        const body = SeaGlassColors.cobalt;
+        final path = seaGlassSizeResponse(
+          _bodyOnly,
+          _tileSize.shortestSide,
+        ).path;
+        for (final (channel, value) in [body.r, body.g, body.b].indexed) {
+          expect(
+            center[channel],
+            closeTo(255 * math.pow(value, path), 6),
+            reason: 'channel $channel',
+          );
+        }
         // Two points inside the left edge the glass is thinner and paler.
         final rim = pixel(22, 70);
         expect(_luminance(rim), greaterThan(_luminance(center) + 20));
@@ -377,6 +514,147 @@ void main() {
         // Scattered light keeps the glass visible, in its color, over black.
         expect(_luminance(overBlack), greaterThan(25));
         expect(overBlack[2], greaterThan(overBlack[0]));
+      },
+      skip: skipProperGlassTests,
+    );
+
+    testWidgets(
+      'the frost moves with its own shape, not with the layer',
+      (tester) async {
+        // Two separate shapes in one layer; only the second moves.
+        Widget pair(double secondLeft) => Directionality(
+          textDirection: TextDirection.ltr,
+          child: Stack(
+            children: [
+              const Positioned.fill(child: ColoredBox(color: Colors.white)),
+              Positioned.fill(
+                child: LiquidGlassLayer(
+                  settings: _flat(
+                    _bodyOnly.copyWith(grain: 1, sparkle: 1),
+                  ),
+                  child: Stack(
+                    children: [
+                      for (final left in [10.0, secondLeft])
+                        Positioned(
+                          left: left,
+                          top: 20,
+                          child: LiquidGlass(
+                            appearance: LiquidGlassAppearance.seaGlass(
+                              color: SeaGlassColors.white.withValues(
+                                alpha: .5,
+                              ),
+                            ),
+                            shape: const LiquidRoundedSuperellipse(
+                              borderRadius: 30,
+                            ),
+                            child: const SizedBox.square(dimension: 100),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+
+        final before = await _render(tester, pair(120));
+        final after = await _render(tester, pair(130));
+        var maxDifference = 0;
+        void compare(List<int> a, List<int> b) {
+          for (var c = 0; c < 3; c++) {
+            maxDifference = math.max(maxDifference, (a[c] - b[c]).abs());
+          }
+        }
+
+        for (var y = 30.0; y < 110; y += 2.5) {
+          // The first shape stays put, frost included.
+          for (var x = 20.0; x < 100; x += 2.5) {
+            compare(before(x, y), after(x, y));
+          }
+          // The second carries its frost along.
+          for (var x = 130.0; x < 210; x += 2.5) {
+            compare(before(x, y), after(x + 10, y));
+          }
+        }
+        expect(maxDifference, lessThanOrEqualTo(2));
+      },
+      skip: skipProperGlassTests,
+    );
+
+    testWidgets(
+      'larger glass absorbs more of its body color',
+      (tester) async {
+        final pixel = await _render(
+          tester,
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Stack(
+              children: [
+                const Positioned.fill(
+                  child: ColoredBox(color: Colors.white),
+                ),
+                Positioned.fill(
+                  child: LiquidGlassLayer(
+                    settings: _flat(_bodyOnly),
+                    child: Stack(
+                      children: [
+                        for (final (left, side) in [
+                          (10.0, 60.0),
+                          (100.0, 130.0),
+                        ])
+                          Positioned(
+                            left: left,
+                            top: 5,
+                            child: LiquidGlass(
+                              appearance: const LiquidGlassAppearance.seaGlass(
+                                color: SeaGlassColors.cobalt,
+                              ),
+                              shape: const LiquidOval(),
+                              child: SizedBox.square(dimension: side),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+        final small = _luminance(pixel(40, 35));
+        final large = _luminance(pixel(165, 70));
+        expect(large, lessThan(small - 5));
+      },
+      skip: skipProperGlassTests,
+    );
+
+    testWidgets(
+      'the glint follows the light',
+      (tester) async {
+        Future<(double, double)> topAndSide(double angle) async {
+          final pixel = await _render(
+            tester,
+            _scene(
+              const LiquidGlassSettings(
+                refractionHeight: 0,
+                refractionAmount: 0,
+                frost: 0,
+                highlight: 2,
+                contourStrength: 0,
+                bevelShadowStrength: 0,
+              ).copyWith(lightAngle: angle),
+              const LiquidGlassAppearance(tint: Color(0xFF808080)),
+            ),
+          );
+          // Half a point inside the top wall and the left wall.
+          return (_luminance(pixel(120, 20.5)), _luminance(pixel(20.5, 70)));
+        }
+
+        final (topOverhead, sideOverhead) = await topAndSide(0);
+        final (topFromLeft, sideFromLeft) = await topAndSide(-math.pi / 2);
+        expect(topOverhead, greaterThan(sideOverhead + 10));
+        expect(sideFromLeft, greaterThan(topFromLeft + 10));
       },
       skip: skipProperGlassTests,
     );

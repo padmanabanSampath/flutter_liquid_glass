@@ -7,6 +7,8 @@ import 'package:liquid_glass_renderer_example/playground/scenes/draggable_glass.
 ///
 /// Appearance is per shape, so light, dark, clear and tinted glass share a
 /// single backdrop capture, and their colors blend where the shapes merge.
+/// Under a sea glass finish the swatches are sea glass pebbles instead, which
+/// fuse through a thinner, paler neck.
 class ColorsScene extends StatelessWidget {
   const ColorsScene({required this.blend, super.key});
 
@@ -41,8 +43,38 @@ class ColorsScene extends StatelessWidget {
     ),
   ];
 
+  static const _pebbles = [
+    (
+      label: 'Seafoam',
+      offset: Offset(-50, -50),
+      glyph: Color(0xFF173A40),
+      appearance: LiquidGlassAppearance.seaGlass(),
+    ),
+    (
+      label: 'Cobalt',
+      offset: Offset(50, -50),
+      glyph: Color(0xFFFFFFFF),
+      appearance: LiquidGlassAppearance.seaGlass(color: SeaGlassColors.cobalt),
+    ),
+    (
+      label: 'Amber',
+      offset: Offset(-50, 50),
+      glyph: Color(0xFF3A2405),
+      appearance: LiquidGlassAppearance.seaGlass(color: SeaGlassColors.amber),
+    ),
+    (
+      label: 'Aqua',
+      offset: Offset(50, 50),
+      glyph: Color(0xFFFFFFFF),
+      appearance: LiquidGlassAppearance.seaGlass(color: SeaGlassColors.aqua),
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
+    final swatches = LiquidGlassSettings.of(context).seaGlassFinish.isEnabled
+        ? _pebbles
+        : _swatches;
     return LayoutBuilder(
       builder: (context, constraints) {
         final center = constraints.biggest.center(Offset.zero);
@@ -52,7 +84,7 @@ class ColorsScene extends StatelessWidget {
               LiquidGlassBlendGroup(blend: blend, child: shapes!),
           child: Stack(
             children: [
-              for (final swatch in _swatches)
+              for (final swatch in swatches)
                 DraggableGlass(
                   center: center,
                   offset: swatch.offset,

@@ -13,6 +13,18 @@
   glass, and `SeaGlassFinish.shadows` a body-tinted shadow. FakeGlass
   approximates the finish. The default `SeaGlassFinish.none()` renders
   exactly as before.
+- **Sea glass physics.** The `seaGlass` preset uses a pebble lens
+  (`refractionFitsShape: false`), larger shapes are thicker glass, each
+  shape's frost moves with that shape and cross-fades seamlessly across a
+  blend group's bridge, and `LiquidStretch.seaGlass` gives a stiffer,
+  heavier response.
+- **Lean frost.** `SeaGlassFinish.stochasticFrost` (on by default) renders
+  the frost in the glass pass with scattered samples, so sea glass layers
+  need no blur pass.
+- **Light direction.** `LiquidGlassSettings.lightAngle` turns the light that
+  places the glint, border, inner shadow and sea glass rim and sparkles;
+  feed it device tilt for Apple-style motion highlights. `0` renders as
+  before.
 
 ## 1.0.0-dev.1
 

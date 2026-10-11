@@ -280,10 +280,11 @@ void main() {
     final layer = renderer;
 
     expect(source, contains('uniform vec4 uBackdropBounds'));
-    // One definition, the displaced sample, and the three dispersion taps.
+    // One definition, the displaced sample, the sea glass frost's scattered
+    // taps, and the three dispersion taps.
     expect(
       RegExp(r'mirrorIntoBackdrop\s*\(').allMatches(source).length,
-      5,
+      6,
     );
     expect(renderer, contains('initialIndex: 55'));
     // The bounds are the native filter clip, not the material bounds: the
