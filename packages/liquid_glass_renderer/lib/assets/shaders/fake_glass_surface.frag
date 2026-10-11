@@ -46,12 +46,55 @@ uniform vec4 uRseSemiAxisAndRadii;
 // strongly while regular glass brightens mostly the transmitted chroma.
 uniform float uGlintFaceGain;
 uniform float uGlintVibrancy;
+// Sea glass finish (SeaGlassFinish), in logical pixels. The backdrop
+// filter applies the body at its mean thickness; this pass adds what varies
+// across the face: the paler thin rim, the rim glow, grain and sparkles.
+//   uSeaGlassBody:    strength, depth, scatter, rimGlow
+//   uSeaGlassSurface: grain, grainSize, sparkle, -
+//   uSeaGlassColor:   body color, density
+uniform vec4 uSeaGlassBody;
+uniform vec4 uSeaGlassSurface;
+uniform vec4 uSeaGlassColor;
 
 const vec3 LUMA_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
 
 layout(location = 0) out vec4 fragColor;
 
 #include "fake_glass_shape.glsl"
+#include "sea_glass.glsl"
+
+// The varying part of the sea glass face, premultiplied, to composite over
+// the face the backdrop filter produced.
+vec4 seaGlassOverlay(vec2 position, float inward, float facing) {
+  float strength = clamp(uSeaGlassBody.x, 0.0, 1.0);
+  float thickness = seaGlassThickness(inward, uSeaGlassBody.y);
+  float density = clamp(uSeaGlassColor.a, 0.0, 1.0);
+  vec3 bodyColor = clamp(uSeaGlassColor.rgb, vec3(0.02), vec3(1.0));
+  vec3 pastel = mix(vec3(1.0), pow(bodyColor, vec3(0.4 * density)), 0.85);
+  // The filter colors the face as if it were evenly thick; the thin rim
+  // carries less of a dark body, so it is lifted toward the pastel.
+  float rimLift = (1.0 - thickness) * 0.45 * density *
+      (1.0 - dot(bodyColor, LUMA_WEIGHTS));
+  float rimLight = mix(0.4, 1.0, smoothstep(-1.0, 1.0, facing));
+  float rimGlow = clamp(uSeaGlassBody.w, 0.0, 1.0) * (1.0 - thickness) *
+      rimLight * 0.6;
+  float paleAlpha = 1.0 - (1.0 - rimLift) * (1.0 - rimGlow);
+  vec4 overlay = vec4(pastel * paleAlpha, paleAlpha);
+
+  highp float grainSize = max(uSeaGlassSurface.y, 0.25);
+  float grain = seaGlassPits(position, grainSize).z *
+      clamp(uSeaGlassSurface.x, 0.0, 1.0) * 0.36;
+  // Positive grain lightens and negative grain darkens the face.
+  vec4 speck = grain > 0.0
+      ? vec4(vec3(grain), grain)
+      : vec4(vec3(0.0), -grain);
+  overlay = speck + overlay * (1.0 - speck.a);
+
+  float sparkle = seaGlassSparkle(position, grainSize, uPixelSize) *
+      clamp(uSeaGlassSurface.z, 0.0, 1.0);
+  overlay = vec4(vec3(sparkle), sparkle) + overlay * (1.0 - sparkle);
+  return overlay * strength;
+}
 
 float shapeDistance(vec2 p) {
   return sdFakeGlassShape(
@@ -200,6 +243,11 @@ void main() {
       uFaceEmission * bevelShadow * (1.0 - tintAlpha) *
           (1.0 - backdropContourAbsorption);
   float litAlpha = materialAlpha;
+  if (uSeaGlassBody.x > 0.0) {
+    vec4 seaGlass = seaGlassOverlay(position, inward, facing);
+    litPremultiplied = seaGlass.rgb + litPremultiplied * (1.0 - seaGlass.a);
+    litAlpha = seaGlass.a + litAlpha * (1.0 - seaGlass.a);
+  }
   vec3 faceProxy = uTint.rgb * tintAlpha + uFaceEmission;
   vec3 glintTarget = vec3(uGlintLuminance) +
       uGlintFaceGain * faceProxy +

@@ -65,6 +65,14 @@ uniform vec2 uMaterialTextureSize;
 //   +7: contourResponse
 uniform vec4 uColorModelParams[24];
 
+// Sea glass finish (SeaGlassFinish), distances in device pixels:
+//   uSeaGlassBody:    strength, depth, scatter, rimGlow
+//   uSeaGlassSurface: grain, grainSize, sparkle, pitting
+// Strength 0 disables the stage; every branch on it is uniform, so regular
+// glass renders exactly as without it.
+uniform vec4 uSeaGlassBody;
+uniform vec4 uSeaGlassSurface;
+
 vec4 colorModelSlot(int slot, int field) {
     return uColorModelParams[slot * 8 + field];
 }
@@ -93,6 +101,14 @@ float uBevelShadowDirectionality = uLightingShapeConfig.x;
 float uBevelShadowSizeResponse = uLightingShapeConfig.y;
 float uHighlightWidth = uLightingShapeConfig.z;
 float uHighlightOppositeStrength = uLightingShapeConfig.w;
+float uSeaGlassStrength = clamp(uSeaGlassBody.x, 0.0, 1.0);
+float uSeaGlassDepth = max(uSeaGlassBody.y, 0.001);
+float uSeaGlassScatter = clamp(uSeaGlassBody.z, 0.0, 1.0);
+float uSeaGlassRimGlow = clamp(uSeaGlassBody.w, 0.0, 1.0);
+float uSeaGlassGrain = clamp(uSeaGlassSurface.x, 0.0, 1.0);
+float uSeaGlassGrainSize = max(uSeaGlassSurface.y, 0.25);
+float uSeaGlassSparkle = clamp(uSeaGlassSurface.z, 0.0, 1.0);
+float uSeaGlassPitting = max(uSeaGlassSurface.w, 0.0);
 
 // The fitted/default CA range is below the pixel response of the backdrop
 // sampler: the pinned three-scene scan found no score or decoded-image gain
@@ -499,6 +515,66 @@ vec3 applySpecularHighlights(
     return result;
 }
 
+// MARK: Sea glass
+
+#include "sea_glass.glsl"
+
+// Sparkles pull toward this luminance; above SDR white like the glint, so
+// extended-range surfaces keep their headroom.
+const float kSeaGlassSparkleLuminance = 1.3;
+// Share of the full body color the paper-thin rim still carries.
+const float kSeaGlassRimPath = 0.3;
+
+// The sea glass face over the refracted backdrop.
+//
+// The body filters the backdrop like colored glass, more where the rounded
+// pebble is thicker (Beer-Lambert with a parabolic thickness profile over
+// uSeaGlassDepth), so the center is deepest in color and the rim pales. The
+// frost scatters part of the light: front light scattered inside the body
+// leaves it in the body's color, so the glass glows even over dark content,
+// more at the grazing rim and brighter over light backdrops. The rim glows
+// in a pastel of the body where it faces the light. Returns the face;
+// transmitted receives the share of it that came through the glass.
+vec3 seaGlassFace(
+    vec3 backdrop,
+    float backdropLuminance,
+    vec4 body,
+    float inwardDistance,
+    vec2 surfaceNormal,
+    float grain,
+    out vec3 transmitted
+) {
+    float thickness = seaGlassThickness(inwardDistance, uSeaGlassDepth);
+    float density = clamp(body.a, 0.0, 1.0);
+    vec3 bodyColor = clamp(body.rgb, vec3(0.02), vec3(1.0));
+    vec3 transmittance = pow(
+        bodyColor,
+        vec3(density * mix(kSeaGlassRimPath, 1.0, thickness))
+    );
+    float scatter = clamp(
+        uSeaGlassScatter * mix(1.6, 1.0, thickness),
+        0.0,
+        1.0
+    );
+    transmitted = backdrop * transmittance * (1.0 - scatter);
+    float ambient = mix(0.7, 1.0, clamp(backdropLuminance, 0.0, 1.0));
+    vec3 glow = mix(vec3(1.0), transmittance, 0.6);
+    vec3 face = transmitted + glow * ambient * scatter;
+    vec3 pastel = mix(vec3(1.0), pow(bodyColor, vec3(0.4 * density)), 0.85);
+    // The rim band fades quadratically over the rounded shoulder; it is
+    // strongest on the wall facing the light and never vanishes opposite it.
+    float rimBand = 1.0 - thickness;
+    float lightFacing = dot(surfaceNormal, -uLightDirection);
+    float rimLight = mix(0.4, 1.0, smoothstep(-1.0, 1.0, lightFacing));
+    face = mix(
+        face,
+        max(face, pastel * mix(0.8, 1.0, ambient)),
+        clamp(uSeaGlassRimGlow * rimBand * rimLight * 0.6, 0.0, 1.0)
+    );
+    face += vec3(grain * uSeaGlassGrain * 0.18);
+    return max(face, vec3(0.0));
+}
+
 
 void main() {
     // Map image-filter fragment coordinates back into the layer-local geometry
@@ -672,6 +748,17 @@ void main() {
         decodeDisplacement(geometryData, maxDisplacement) *
         appearanceVisibility;
     vec2 surfaceNormal = decodeSurfaceNormal(geometryData);
+    // Sea glass pits break up the backdrop seen through the face. Like the
+    // bevel, they settle with visibility.
+    vec3 seaGlassPitSample = vec3(0.0);
+    if (uSeaGlassStrength > 0.0) {
+        seaGlassPitSample = seaGlassPits(
+            matteCoord - uMaterialCenter,
+            uSeaGlassGrainSize
+        );
+        displacement += seaGlassPitSample.xy * uSeaGlassPitting *
+            uSeaGlassStrength * appearanceVisibility;
+    }
 
     vec2 invUSize = 1.0 / uSize;
     vec2 backdropScaleOffset = vec2(0.0);
@@ -896,6 +983,36 @@ void main() {
         );
     }
 
+    if (uSeaGlassStrength > 0.0) {
+        // The tint is the body color here, not a wash; the appearance's
+        // gamma and saturation still shape the light that reaches it.
+        vec3 seaGlassBackdrop = pow(
+            max(refractColor.rgb, vec3(0.0)),
+            vec3(max(uTransmissionGamma, 0.01))
+        );
+        float seaGlassLuminance = dot(seaGlassBackdrop, LUMA_WEIGHTS);
+        seaGlassBackdrop = max(
+            mix(vec3(seaGlassLuminance), seaGlassBackdrop, uSaturation),
+            vec3(0.0)
+        );
+        vec3 seaGlassTransmitted;
+        vec3 seaGlassBase = seaGlassFace(
+            seaGlassBackdrop,
+            seaGlassLuminance,
+            materialTint,
+            max(signedEdgeDistance, 0.0),
+            surfaceNormal,
+            seaGlassPitSample.z,
+            seaGlassTransmitted
+        );
+        baseColor = mix(baseColor, seaGlassBase, uSeaGlassStrength);
+        transmittedColor = mix(
+            transmittedColor,
+            seaGlassTransmitted,
+            uSeaGlassStrength
+        );
+    }
+
     // Reconstruct the original material silhouette from the signed SDF. The
     // geometry alpha is only an expanded support mask, allowing the attached
     // contour to sit outside without turning those pixels into glass.
@@ -905,6 +1022,18 @@ void main() {
         signedEdgeDistance,
         surfaceNormal
     );
+    if (uSeaGlassStrength > 0.0 && uSeaGlassSparkle > 0.0) {
+        float sparkle = seaGlassSparkle(
+            matteCoord - uMaterialCenter,
+            uSeaGlassGrainSize,
+            0.75
+        ) * uSeaGlassSparkle * uSeaGlassStrength;
+        litColor = mix(
+            litColor,
+            vec3(kSeaGlassSparkleLuminance),
+            clamp(sparkle, 0.0, 1.0)
+        );
+    }
     // The lit material (face, tint, saturation, lighting and in-material
     // contour) cross-fades to the refracted backdrop, whose refraction
     // scales with visibility. Fading the output rather than each parameter

@@ -1,3 +1,19 @@
+## Unreleased
+
+### Features
+
+- **Sea glass.** A tumbled, frosted, colored glass material.
+  `LiquidGlassSettings.seaGlass()` pairs a shallow lens, light frost and a
+  soft glint with a `SeaGlassFinish` (`LiquidGlassSettings.seaGlassFinish`):
+  the appearance tint becomes the glass body, which filters the backdrop
+  deepest at the pebble's center and pales toward its thin rim, under a
+  scattered glow in the body's color, a frosted rim glow, fine grain,
+  sparkles and pitted transmission. `LiquidGlassAppearance.seaGlass` sets a
+  shape's body color; `SeaGlassColors` holds colors sampled from real sea
+  glass, and `SeaGlassFinish.shadows` a body-tinted shadow. FakeGlass
+  approximates the finish. The default `SeaGlassFinish.none()` renders
+  exactly as before.
+
 ## 1.0.0-dev.1
 
 > Note: This release has breaking changes.

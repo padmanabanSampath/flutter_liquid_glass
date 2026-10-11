@@ -124,16 +124,21 @@ class RenderConsolidatedFakeGlassLayer extends LiquidGlassRenderObject
   bool get _hasColorTransfer =>
       defaultAppearance.saturation != 1 ||
       defaultAppearance.transmissionGamma != 1 ||
-      defaultAppearance.colorModel.faceTransfer(_shortSide) != null;
+      defaultAppearance.colorModel.faceTransfer(_shortSide) != null ||
+      settings.seaGlassFinish.isEnabled;
   bool get _hasBackdropEffect => _hasBlur || _hasColorTransfer;
 
   /// Whether [appearance] can be served by the layer's shared backdrop
   /// filter — that is, it differs from [defaultAppearance] only in fields
-  /// the surface pass and opacity handle (tint, vibrancy, visibility).
+  /// the surface pass and opacity handle (tint, vibrancy, visibility). Under
+  /// sea glass the backdrop filter applies the tint as the body, so the
+  /// tint must match too.
   bool _sharesLayerBackdrop(LiquidGlassAppearance appearance) =>
       appearance.saturation == defaultAppearance.saturation &&
       appearance.transmissionGamma == defaultAppearance.transmissionGamma &&
-      appearance.colorModel == defaultAppearance.colorModel;
+      appearance.colorModel == defaultAppearance.colorModel &&
+      (!settings.seaGlassFinish.isEnabled ||
+          appearance.tint == defaultAppearance.tint);
 
   @visibleForTesting
   BackdropFilterLayer? get debugBackdropFilterLayer => _backdropLayer.layer;

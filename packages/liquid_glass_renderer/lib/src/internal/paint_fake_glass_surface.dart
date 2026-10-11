@@ -100,11 +100,15 @@ void paintFakeGlassSurface(
   bool exteriorOnly = false,
 }) {
   final appearanceVisibility = appearance.visibility.clamp(0.0, 1.0);
+  final seaGlass = settings.seaGlassFinish;
   final surfaceTint = appearance.colorModel.approximateSurfaceTint(
     appearance.tint,
   );
+  // Under sea glass the tint is the body, which the backdrop filter applies,
+  // so the wash fades out with the finish's strength.
   final tint = surfaceTint.withValues(
-    alpha: surfaceTint.a * appearanceVisibility,
+    alpha:
+        surfaceTint.a * appearanceVisibility * (1 - seaGlass.effectiveStrength),
   );
   final faceEmission =
       appearance.colorModel
@@ -167,7 +171,21 @@ void paintFakeGlassSurface(
             : _noSuperellipse,
       )
       ..setFloat(appearance.colorModel.fakeGlintFaceGain)
-      ..setFloat(appearance.colorModel.fakeGlintVibrancy);
+      ..setFloat(appearance.colorModel.fakeGlintVibrancy)
+      ..setFloats([
+        seaGlass.effectiveStrength * appearanceVisibility,
+        seaGlass.effectiveDepth,
+        seaGlass.effectiveScatter,
+        seaGlass.effectiveRimGlow,
+        seaGlass.effectiveGrain,
+        seaGlass.effectiveGrainSize,
+        seaGlass.effectiveSparkle,
+        0,
+        appearance.tint.r,
+        appearance.tint.g,
+        appearance.tint.b,
+        appearance.tint.a,
+      ]);
   });
   final contourOutset = fakeGlassSurfaceOutset(settings);
   canvas.drawRect(

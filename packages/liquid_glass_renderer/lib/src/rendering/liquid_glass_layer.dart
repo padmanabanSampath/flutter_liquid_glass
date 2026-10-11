@@ -666,6 +666,25 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
               : GlassColorParameters.ios27Light.toShaderParameters(),
       ]);
     });
+    // Float index 159, after the color-model slots: the sea glass finish.
+    // Its depth is clamped to the edge distance the matte can decode.
+    final seaGlass = settings.seaGlassFinish;
+    shader.setFloatUniforms(initialIndex: 159, (value) {
+      value.setFloats([
+        seaGlass.effectiveStrength,
+        min(
+              seaGlass.effectiveDepth,
+              4 * settings.effectiveEdgeDistanceRange,
+            ) *
+            devicePixelRatio,
+        seaGlass.effectiveScatter,
+        seaGlass.effectiveRimGlow,
+        seaGlass.effectiveGrain,
+        seaGlass.effectiveGrainSize * devicePixelRatio,
+        seaGlass.effectiveSparkle,
+        seaGlass.effectivePitting * devicePixelRatio,
+      ]);
+    });
   }
 
   /// Largest frost, in device pixels, folded into the final pass instead of
@@ -1433,16 +1452,18 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
 
   /// How far outside the material the composed filter reads the backdrop:
   /// the blur kernel (3 sigma), the peak edge displacement including its
-  /// dispersion, and, with [LiquidGlassSettings.backdropShrink], the extra
-  /// content revealed on the face. A `LiquidGlassCapture` must contain this
-  /// reach or the filter samples its own edge.
+  /// dispersion and any sea glass pitting, and, with
+  /// [LiquidGlassSettings.backdropShrink], the extra content revealed on the
+  /// face. A `LiquidGlassCapture` must contain this reach or the filter
+  /// samples its own edge.
   double backdropSamplingReach(Rect material) {
     final blur = blurPassSigma > 0
         ? blurPassSigma * 3 + 1 / devicePixelRatio
         : (softensInShader ? 1 / devicePixelRatio : 0.0);
     final displacement =
         settings.effectiveDisplacementScale *
-        (1 + settings.dispersion.abs() * 0.5);
+            (1 + settings.dispersion.abs() * 0.5) +
+        settings.seaGlassFinish.samplingReach;
     final scale = 1 - settings.effectiveBackdropShrink;
     final revealed = (1 / scale - 1) * max(material.width, material.height) / 2;
     return blur + displacement + revealed;

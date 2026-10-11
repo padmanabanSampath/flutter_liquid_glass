@@ -131,9 +131,64 @@ List<double> fakeGlassFaceMatrix({
   return result..addAll([0, 0, 0, opacity.clamp(0.0, 1.0), 0]);
 }
 
+/// Share of the full body color a sea glass face carries on average; the
+/// real renderer varies it from the thin rim to the full-thickness center.
+const _seaGlassMeanPath = 0.8;
+
+/// The sea glass face at its mean thickness as a 4x5 color matrix: the
+/// saturated backdrop filtered by the body, plus the light the frost
+/// scatters in the body's color, brighter over light backdrops. This is the
+/// final render shader's face without the rim, which the surface pass adds.
+@internal
+List<double> fakeGlassSeaGlassMatrix({
+  required SeaGlassFinish finish,
+  required Color body,
+  double saturation = 1,
+  double opacity = 1,
+}) {
+  const luminance = [0.2126, 0.7152, 0.0722];
+  final density = body.a.clamp(0.0, 1.0);
+  final scatter = finish.effectiveScatter;
+  final bodyColor = [body.r, body.g, body.b];
+  final result = <double>[];
+  for (var row = 0; row < 3; row++) {
+    final transmittance = math
+        .pow(
+          bodyColor[row].clamp(0.02, 1.0),
+          density * _seaGlassMeanPath,
+        )
+        .toDouble();
+    final glow = 1 + (transmittance - 1) * 0.6;
+    for (var column = 0; column < 3; column++) {
+      final saturated =
+          luminance[column] * (1 - saturation) +
+          (row == column ? saturation : 0);
+      result.add(
+        transmittance * (1 - scatter) * saturated +
+            glow * scatter * 0.3 * luminance[column],
+      );
+    }
+    result
+      ..add(0)
+      // ColorFilter.matrix biases use the 0-255 channel scale.
+      ..add(glow * scatter * 0.7 * 255);
+  }
+  return result..addAll([0, 0, 0, opacity.clamp(0.0, 1.0), 0]);
+}
+
+/// The identity color matrix at [opacity].
+List<double> _identityMatrix(double opacity) => [
+  1, 0, 0, 0, 0, //
+  0, 1, 0, 0, 0,
+  0, 0, 1, 0, 0,
+  0, 0, 0, opacity.clamp(0.0, 1.0), 0,
+];
+
 /// Builds the backdrop-only portion shared by standalone and consolidated
 /// fake glass. Tint remains in the analytic surface pass so contour
-/// transmittance can treat tint and backdrop energy independently.
+/// transmittance can treat tint and backdrop energy independently, except
+/// under a sea glass finish, where the tint is the body that filters the
+/// backdrop.
 @internal
 ImageFilter? fakeGlassBackdropFilter(
   LiquidGlassSettings settings,
@@ -154,38 +209,54 @@ ImageFilter? fakeGlassBackdropFilter(
     shortSide,
     tintAmount: settings.effectiveTintAmount,
   );
-  final ColorFilter? colorTransfer;
+  List<double>? transferMatrix;
   if (faceTransfer != null) {
-    colorTransfer = ColorFilter.matrix(
-      fakeGlassFaceMatrix(
-        emission: faceTransfer.emission,
-        transmittance: faceTransfer.transmittance,
-        lift: faceTransfer.lift,
-        chromaGain: faceTransfer.chromaGain * appearance.saturation,
-        transmissionGamma: appearance.transmissionGamma,
-        opacity: visibility,
-      ),
+    transferMatrix = fakeGlassFaceMatrix(
+      emission: faceTransfer.emission,
+      transmittance: faceTransfer.transmittance,
+      lift: faceTransfer.lift,
+      chromaGain: faceTransfer.chromaGain * appearance.saturation,
+      transmissionGamma: appearance.transmissionGamma,
+      opacity: visibility,
     );
   } else {
     final hasMaterialColorTransfer =
         appearance.saturation != 1 || appearance.transmissionGamma != 1;
     final hasColorTransfer =
         hasMaterialColorTransfer || (blur != null && visibility < 1);
-    colorTransfer = hasColorTransfer
-        ? ColorFilter.matrix(
-            fakeGlassColorMatrix(
-              saturation: appearance.saturation,
-              tint: const Color(0x00000000),
-              transmissionGamma: appearance.transmissionGamma,
-              // A partially transparent filtered backdrop composites over the
-              // untouched backdrop, matching RealGlass's material fade without
-              // another backdrop sample. The opacity alone fades the transfer,
-              // like the face matrix above, so it fades linearly.
-              opacity: visibility,
-            ),
+    transferMatrix = hasColorTransfer
+        ? fakeGlassColorMatrix(
+            saturation: appearance.saturation,
+            tint: const Color(0x00000000),
+            transmissionGamma: appearance.transmissionGamma,
+            // A partially transparent filtered backdrop composites over the
+            // untouched backdrop, matching RealGlass's material fade without
+            // another backdrop sample. The opacity alone fades the transfer,
+            // like the face matrix above, so it fades linearly.
+            opacity: visibility,
           )
         : null;
   }
+  final seaGlass = settings.seaGlassFinish;
+  if (seaGlass.isEnabled) {
+    // Both matrices are affine, so the finish's strength cross-fades them
+    // like the real renderer cross-fades the two faces.
+    final from = transferMatrix ?? _identityMatrix(visibility);
+    final to = fakeGlassSeaGlassMatrix(
+      finish: seaGlass,
+      body: appearance.tint,
+      saturation: appearance.saturation,
+      opacity: visibility,
+    );
+    final strength = seaGlass.effectiveStrength;
+    transferMatrix = [
+      for (var i = 0; i < to.length; i++)
+        from[i] + (to[i] - from[i]) * strength,
+    ];
+  }
+  final colorTransfer = transferMatrix == null
+      ? null
+      : ColorFilter.matrix(transferMatrix);
   return switch ((blur, colorTransfer)) {
     (final blur?, final colorTransfer?) => ImageFilter.compose(
       inner: blur,

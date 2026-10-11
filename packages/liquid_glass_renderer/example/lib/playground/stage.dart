@@ -5,6 +5,7 @@ import 'package:liquid_glass_renderer_example/playground/scenes/blend_scene.dart
 import 'package:liquid_glass_renderer_example/playground/scenes/colors_scene.dart';
 import 'package:liquid_glass_renderer_example/playground/scenes/controls_scene.dart';
 import 'package:liquid_glass_renderer_example/playground/scenes/loupe_scene.dart';
+import 'package:liquid_glass_renderer_example/playground/scenes/sea_glass_scene.dart';
 import 'package:liquid_glass_renderer_example/playground/sheet_avoidance.dart';
 
 /// All glass on the stage, rendered by a single [LiquidGlassLayer], with the
@@ -75,6 +76,7 @@ class Stage extends StatelessWidget {
                         child: ColorsScene(blend: state.blend),
                       ),
                       StageScene.loupe => const SizedBox.shrink(),
+                      StageScene.seaGlass => const SeaGlassScene(),
                     },
                   ),
                 ),

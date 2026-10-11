@@ -10,7 +10,8 @@ enum StageScene {
   controls('Controls'),
   blend('Blend'),
   colors('Colors'),
-  loupe('Loupe');
+  loupe('Loupe'),
+  seaGlass('Sea Glass');
 
   const StageScene(this.label);
 

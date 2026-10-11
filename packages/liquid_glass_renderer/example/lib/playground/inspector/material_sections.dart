@@ -109,9 +109,99 @@ class MaterialSections extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 28),
+            _SeaGlassSection(
+              finish: settings.seaGlassFinish,
+              onChanged: (finish) =>
+                  edit(settings.copyWith(seaGlassFinish: finish)),
+            ),
+            const SizedBox(height: 28),
           ],
         );
       },
+    );
+  }
+}
+
+/// The tumbled sea glass finish. Strength `0` is regular liquid glass.
+class _SeaGlassSection extends StatelessWidget {
+  const _SeaGlassSection({required this.finish, required this.onChanged});
+
+  final SeaGlassFinish finish;
+  final ValueChanged<SeaGlassFinish> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    String amount(double v) => v.toStringAsFixed(2);
+    return InspectorCard(
+      header: 'Sea Glass',
+      children: [
+        SliderRow(
+          title: 'Strength',
+          value: finish.strength,
+          min: 0,
+          max: 1,
+          format: amount,
+          onChanged: (v) => onChanged(finish.copyWith(strength: v)),
+        ),
+        if (finish.isEnabled) ...[
+          SliderRow(
+            title: 'Depth',
+            value: finish.depth,
+            min: 1,
+            max: 48,
+            format: _points,
+            onChanged: (v) => onChanged(finish.copyWith(depth: v)),
+          ),
+          SliderRow(
+            title: 'Scatter',
+            value: finish.scatter,
+            min: 0,
+            max: 1,
+            format: amount,
+            onChanged: (v) => onChanged(finish.copyWith(scatter: v)),
+          ),
+          SliderRow(
+            title: 'Rim Glow',
+            value: finish.rimGlow,
+            min: 0,
+            max: 1,
+            format: amount,
+            onChanged: (v) => onChanged(finish.copyWith(rimGlow: v)),
+          ),
+          SliderRow(
+            title: 'Grain',
+            value: finish.grain,
+            min: 0,
+            max: 1,
+            format: amount,
+            onChanged: (v) => onChanged(finish.copyWith(grain: v)),
+          ),
+          SliderRow(
+            title: 'Grain Size',
+            value: finish.grainSize,
+            min: 0.5,
+            max: 4,
+            format: _points,
+            onChanged: (v) => onChanged(finish.copyWith(grainSize: v)),
+          ),
+          SliderRow(
+            title: 'Sparkle',
+            value: finish.sparkle,
+            min: 0,
+            max: 1,
+            format: amount,
+            onChanged: (v) => onChanged(finish.copyWith(sparkle: v)),
+          ),
+          SliderRow(
+            title: 'Pitting',
+            value: finish.pitting,
+            min: 0,
+            max: 4,
+            format: _points,
+            onChanged: (v) => onChanged(finish.copyWith(pitting: v)),
+          ),
+        ],
+      ],
     );
   }
 }
