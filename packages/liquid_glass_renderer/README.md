@@ -367,8 +367,9 @@ differ:
 - **Merging.** Shapes in a `LiquidGlassBlendGroup` fuse like droplets, as on
   iOS. Between two pebbles the bridge is thin glass, so it is paler and
   frostier than either body, and the two body colors blend across it. Each
-  shape's frost is anchored to that shape, so it moves with the shape and
-  cross-fades without a seam across a bridge.
+  shape's frost lies on that shape's own surface: it moves, turns and
+  stretches with the shape, and cross-fades without a seam across a
+  bridge.
 - **Interaction.** `LiquidStretch.seaGlass` gives a solid pebble's give:
   less swell when pressed, about half the stretch and more resistance than
   Apple's gel-like glass.
@@ -397,8 +398,10 @@ it skips that pass's intermediate textures and the command buffers it costs
 finely grained, as real frosted glass does. For a very heavy frost over a
 large area, turn it off to use the Gaussian blur pass again.
 
-[FakeGlass](#fakeglass) approximates the body at its mean thickness with its
-color filter and draws the rim, grain and sparkles in its surface pass.
+[FakeGlass](#fakeglass) follows the same model without reading the
+backdrop in a shader: its color filter applies the face of the thin rim, a
+multiply-blended thickness pass deepens the body toward the center, and its
+surface pass draws the rim glow, grain and sparkles.
 
 ## Refraction
 

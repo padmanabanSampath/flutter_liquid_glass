@@ -683,8 +683,8 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
         seaGlass.effectivePitting * devicePixelRatio,
       ]);
     });
-    // Float index 231, after the shape boxes: the scattered frost radius.
-    shader.setFloat(231, _scatteredFrostRadius * devicePixelRatio);
+    // Float index 295, after the shape frames: the scattered frost radius.
+    shader.setFloat(295, _scatteredFrostRadius * devicePixelRatio);
   }
 
   /// Largest frost, in device pixels, folded into the final pass instead of
@@ -840,8 +840,9 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
   Rect _geometryMatteBounds = Rect.zero;
   Offset _materialCenterInMatte = Offset.zero;
 
-  /// Matte-space boxes of the encoded shapes in device pixels, four values
-  /// each (center, half extents), for the sea glass frost to anchor to.
+  /// The encoded shapes' frames for the sea glass frost, eight values each:
+  /// the matte-space center and the half size in the shape's own device
+  /// pixels, then the inverse affine basis from matte to shape space.
   List<double> _shapeBoxesInMatte = const [];
   // The matte and material map fill the top-left of textures that only grow.
   Size _geometryTextureSize = Size.zero;
@@ -961,7 +962,7 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
     _shapeBoxesInMatte = [
       for (var i = 0; i < _shapeBoxesInMatte.length; i++)
         _shapeBoxesInMatte[i] +
-            switch (i % 4) {
+            switch (i % 8) {
               0 => shift.dx,
               1 => shift.dy,
               _ => 0,
@@ -1102,16 +1103,16 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
       ..setFloatUniforms(initialIndex: 34, (value) {
         value.setOffset(_materialCenterInMatte * devicePixelRatio);
       })
-      // Float index 167, after the sea glass finish: the shape boxes its
-      // frost anchors to. A negative half extent ends the list.
+      // Float index 167, after the sea glass finish: the shape frames its
+      // frost belongs to. A negative half size ends the list.
       ..setFloatUniforms(initialIndex: 167, (value) {
         value.setFloats([
-          ..._shapeBoxesInMatte.take(maxSeaGlassShapes * 4),
+          ..._shapeBoxesInMatte.take(maxSeaGlassShapes * 8),
           for (
             var i = _shapeBoxesInMatte.length;
-            i < maxSeaGlassShapes * 4;
-            i += 4
-          ) ...const [0.0, 0.0, -1.0, -1.0],
+            i < maxSeaGlassShapes * 8;
+            i += 8
+          ) ...const [0.0, 0.0, -1.0, -1.0, 1.0, 0.0, 0.0, 1.0],
         ]);
       })
       // Float index 59, after uBackdropBounds.
@@ -1703,8 +1704,12 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
           shapeBoxes.addAll([
             center.dx,
             center.dy,
-            halfExtents.width,
-            halfExtents.height,
+            size.width * devicePixelRatio / 2,
+            size.height * devicePixelRatio / 2,
+            inverse00,
+            inverse01,
+            inverse10,
+            inverse11,
           ]);
           final blendMarker = firstInGroup
               ? -(geometry.blend * devicePixelRatio + 1)

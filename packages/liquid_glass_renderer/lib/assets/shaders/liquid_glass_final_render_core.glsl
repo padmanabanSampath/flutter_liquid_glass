@@ -72,10 +72,12 @@ uniform vec4 uColorModelParams[24];
 // glass renders exactly as without it.
 uniform vec4 uSeaGlassBody;
 uniform vec4 uSeaGlassSurface;
-// Matte-space boxes of the layer's shapes (center xy, half extents zw, in
-// device pixels) the sea glass frost anchors to, so it moves with each
-// shape. A negative half extent ends the list.
-uniform vec4 uSeaGlassShapes[16];
+// The layer's shapes, two vec4 each, that the sea glass frost belongs to,
+// so it moves, turns and scales with each shape: the matte-space center
+// (xy) and the half size in the shape's own device pixels (zw), then the
+// inverse affine basis from matte to shape space, packed like the geometry
+// pass's. A negative half size ends the list.
+uniform vec4 uSeaGlassShapes[32];
 // Radius in device pixels of the disc the sea glass frost scatters its
 // backdrop samples over, in place of a blur pass; 0 without.
 uniform float uSeaGlassFrostRadius;
@@ -539,42 +541,62 @@ const int kSeaGlassFrostTaps = 12;
 // The golden angle, which spreads the taps evenly over the disc.
 const float kGoldenAngle = 2.39996323;
 
-// The frost belongs to the shape whose box p lies deepest in. Where a
-// second box is nearly as close, as in the bridge of two merged shapes,
-// both frosts cross-fade instead of meeting at a seam. Returns the second
-// shape's weight; first and second receive the two centers and halfMinor
-// the owners' half short side, blended the same way.
+// Where p lies in a shape's own frame, through its inverse affine basis.
+vec2 seaGlassLocal(vec2 p, vec4 box, vec4 frame) {
+    vec2 delta = p - box.xy;
+    return vec2(
+        frame.x * delta.x + frame.y * delta.y,
+        frame.z * delta.x + frame.w * delta.y
+    );
+}
+
+// The light's direction in a shape's own frame.
+vec2 seaGlassLocalLight(vec4 frame) {
+    vec2 light = vec2(
+        frame.x * uLightDirection.x + frame.y * uLightDirection.y,
+        frame.z * uLightDirection.x + frame.w * uLightDirection.y
+    );
+    return light / max(length(light), 1e-6);
+}
+
+// The frost belongs to the shape whose box, in its own frame, p lies
+// deepest in. Where a second box is nearly as close, as in the bridge of
+// two merged shapes, both frosts cross-fade instead of meeting at a seam.
+// Returns the second shape's weight; the boxes and frames receive both
+// shapes, and halfMinor their half short side, blended the same way.
 float seaGlassOwners(
     vec2 p,
-    out vec2 first,
-    out vec2 second,
+    out vec4 firstBox,
+    out vec4 firstFrame,
+    out vec4 secondBox,
+    out vec4 secondFrame,
     out float halfMinor
 ) {
     float firstDistance = 1e9;
     float secondDistance = 1e9;
-    float firstHalfMinor = 0.0;
-    float secondHalfMinor = 0.0;
-    first = uMaterialCenter;
-    second = uMaterialCenter;
+    firstBox = vec4(uMaterialCenter, 0.0, 0.0);
+    firstFrame = vec4(1.0, 0.0, 0.0, 1.0);
+    secondBox = firstBox;
+    secondFrame = firstFrame;
     for (int i = 0; i < 16; i++) {
-        vec4 box = uSeaGlassShapes[i];
+        vec4 box = uSeaGlassShapes[2 * i];
         if (box.z < 0.0) {
             break;
         }
-        vec2 q = abs(p - box.xy) - box.zw;
+        vec4 frame = uSeaGlassShapes[2 * i + 1];
+        vec2 q = abs(seaGlassLocal(p, box, frame)) - box.zw;
         float d = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0);
-        float boxHalfMinor = min(box.z, box.w);
         if (d < firstDistance) {
             secondDistance = firstDistance;
-            second = first;
-            secondHalfMinor = firstHalfMinor;
+            secondBox = firstBox;
+            secondFrame = firstFrame;
             firstDistance = d;
-            first = box.xy;
-            firstHalfMinor = boxHalfMinor;
+            firstBox = box;
+            firstFrame = frame;
         } else if (d < secondDistance) {
             secondDistance = d;
-            second = box.xy;
-            secondHalfMinor = boxHalfMinor;
+            secondBox = box;
+            secondFrame = frame;
         }
     }
     float weight = 0.5 * (1.0 - smoothstep(
@@ -582,16 +604,20 @@ float seaGlassOwners(
         kSeaGlassAnchorFade * uSeaGlassGrainSize,
         secondDistance - firstDistance
     ));
-    halfMinor = mix(firstHalfMinor, secondHalfMinor, weight);
+    halfMinor = mix(
+        min(firstBox.z, firstBox.w),
+        min(secondBox.z, secondBox.w),
+        weight
+    );
     return weight;
 }
 
-// The pits of the owning shapes, cross-faded with their variance kept so
-// the grain does not flatten in a bridge.
-vec3 seaGlassOwnedPits(vec2 p, vec2 first, vec2 second, float weight) {
-    vec3 pits = seaGlassPits(p - first, uSeaGlassGrainSize);
+// The pits of the owning shapes at their local positions, cross-faded with
+// their variance kept so the grain does not flatten in a bridge.
+vec3 seaGlassOwnedPits(vec2 first, vec2 second, float weight) {
+    vec3 pits = seaGlassPits(first, uSeaGlassGrainSize);
     if (weight > 0.001) {
-        vec3 other = seaGlassPits(p - second, uSeaGlassGrainSize);
+        vec3 other = seaGlassPits(second, uSeaGlassGrainSize);
         pits = (pits * (1.0 - weight) + other * weight) /
             sqrt((1.0 - weight) * (1.0 - weight) + weight * weight);
     }
@@ -829,19 +855,32 @@ void main() {
     // Sea glass pits break up the backdrop seen through the face. Like the
     // bevel, they settle with visibility.
     vec3 seaGlassPitSample = vec3(0.0);
-    vec2 seaGlassFirst = uMaterialCenter;
-    vec2 seaGlassSecond = uMaterialCenter;
+    // Positions and frames of the shapes the frost at this pixel belongs
+    // to; the frost is evaluated in their own frames.
+    vec2 seaGlassFirst = matteCoord - uMaterialCenter;
+    vec2 seaGlassSecond = seaGlassFirst;
+    vec4 seaGlassFirstFrame = vec4(1.0, 0.0, 0.0, 1.0);
+    vec4 seaGlassSecondFrame = seaGlassFirstFrame;
     float seaGlassSecondWeight = 0.0;
     float seaGlassHalfMinor = 0.0;
     if (uSeaGlassStrength > 0.0) {
+        vec4 firstBox;
+        vec4 secondBox;
         seaGlassSecondWeight = seaGlassOwners(
             matteCoord,
-            seaGlassFirst,
-            seaGlassSecond,
+            firstBox,
+            seaGlassFirstFrame,
+            secondBox,
+            seaGlassSecondFrame,
             seaGlassHalfMinor
         );
-        seaGlassPitSample = seaGlassOwnedPits(
+        seaGlassFirst = seaGlassLocal(matteCoord, firstBox, seaGlassFirstFrame);
+        seaGlassSecond = seaGlassLocal(
             matteCoord,
+            secondBox,
+            seaGlassSecondFrame
+        );
+        seaGlassPitSample = seaGlassOwnedPits(
             seaGlassFirst,
             seaGlassSecond,
             seaGlassSecondWeight
@@ -910,7 +949,7 @@ void main() {
             // moves with it). Like the bevel, it settles with visibility.
             float radius = uSeaGlassFrostRadius * appearanceVisibility;
             float turn = 6.2831853 * seaGlassHash(
-                floor(matteCoord - seaGlassFirst)
+                floor(seaGlassFirst)
             );
             vec2 direction = vec2(cos(turn), sin(turn));
             const vec2 kGoldenTurn = vec2(
@@ -1150,19 +1189,19 @@ void main() {
     );
     if (uSeaGlassStrength > 0.0 && uSeaGlassSparkle > 0.0) {
         float sparkle = seaGlassSparkle(
-            matteCoord - seaGlassFirst,
+            seaGlassFirst,
             uSeaGlassGrainSize,
             0.75,
-            uLightDirection
+            seaGlassLocalLight(seaGlassFirstFrame)
         );
         if (seaGlassSecondWeight > 0.001) {
             sparkle = mix(
                 sparkle,
                 seaGlassSparkle(
-                    matteCoord - seaGlassSecond,
+                    seaGlassSecond,
                     uSeaGlassGrainSize,
                     0.75,
-                    uLightDirection
+                    seaGlassLocalLight(seaGlassSecondFrame)
                 ),
                 seaGlassSecondWeight
             );

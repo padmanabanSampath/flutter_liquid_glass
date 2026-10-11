@@ -103,6 +103,19 @@ Future<Uint8List> _renderBytes(WidgetTester tester, Widget child) async {
   return bytes.buffer.asUint8List();
 }
 
+/// Renders [child] and returns a reader of device-pixel RGB values.
+Future<List<int> Function(int x, int y)> _renderDevicePixels(
+  WidgetTester tester,
+  Widget child,
+) async {
+  final bytes = await _renderBytes(tester, child);
+  final width = (_sceneSize.width * _dpr).round();
+  return (int x, int y) {
+    final offset = (y * width + x) * 4;
+    return bytes.sublist(offset, offset + 3);
+  };
+}
+
 double _luminance(List<int> rgb) =>
     0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
 
@@ -295,9 +308,10 @@ void main() {
       }
     });
 
-    test('the body filters white to its color at mean thickness', () {
+    test("the body filters white to the thin rim's color", () {
       const body = SeaGlassColors.cobalt;
-      // A shape twice the default depth across has the smallest response.
+      // The thickness pass deepens it toward the center. A shape twice the
+      // default depth across has the smallest size response.
       final out = apply(
         fakeGlassSeaGlassMatrix(
           finish: const SeaGlassFinish(scatter: 0),
@@ -306,9 +320,9 @@ void main() {
         ),
         [1, 1, 1],
       );
-      expect(out[0], closeTo(math.pow(body.r, .8 * .85), 1e-9));
-      expect(out[1], closeTo(math.pow(body.g, .8 * .85), 1e-9));
-      expect(out[2], closeTo(math.pow(body.b, .8 * .85), 1e-9));
+      expect(out[0], closeTo(math.pow(body.r, .3 * .85), 1e-9));
+      expect(out[1], closeTo(math.pow(body.g, .3 * .85), 1e-9));
+      expect(out[2], closeTo(math.pow(body.b, .3 * .85), 1e-9));
     });
 
     test('scatter makes the glass glow over black', () {
@@ -577,6 +591,127 @@ void main() {
             compare(before(x, y), after(x + 10, y));
           }
         }
+        expect(maxDifference, lessThanOrEqualTo(2));
+      },
+      skip: skipProperGlassTests,
+    );
+
+    testWidgets(
+      'FakeGlass deepens the body toward the center like real glass',
+      (tester) async {
+        Future<(List<int>, List<int>)> centerAndRim({
+          required bool fake,
+        }) async {
+          final pixel = await _render(
+            tester,
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: Stack(
+                children: [
+                  const Positioned.fill(
+                    child: ColoredBox(color: Colors.white),
+                  ),
+                  Center(
+                    child: LiquidGlassLayer(
+                      settings: _flat(_bodyOnly.copyWith(scatter: .25)),
+                      fake: fake,
+                      child: LiquidGlass(
+                        appearance: const LiquidGlassAppearance.seaGlass(
+                          color: SeaGlassColors.cobalt,
+                        ),
+                        shape: const LiquidRoundedSuperellipse(
+                          borderRadius: 30,
+                        ),
+                        child: SizedBox.fromSize(size: _tileSize),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+          return (pixel(120, 70), pixel(22, 70));
+        }
+
+        final (realCenter, realRim) = await centerAndRim(fake: false);
+        final (fakeCenter, fakeRim) = await centerAndRim(fake: true);
+        expect(
+          _luminance(fakeRim),
+          greaterThan(_luminance(fakeCenter) + 20),
+          reason: 'the thin rim is paler than the center',
+        );
+        for (var c = 0; c < 3; c++) {
+          expect(fakeCenter[c], closeTo(realCenter[c], 12), reason: 'center');
+          expect(fakeRim[c], closeTo(realRim[c], 24), reason: 'rim');
+        }
+      },
+      skip: skipProperGlassTests,
+    );
+
+    testWidgets(
+      'the frost turns with its shape',
+      (tester) async {
+        // A disc centered on a device pixel corner, so a quarter turn maps
+        // pixel centers onto pixel centers.
+        Widget disc(double angle) => Directionality(
+          textDirection: TextDirection.ltr,
+          child: Stack(
+            children: [
+              const Positioned.fill(child: ColoredBox(color: Colors.white)),
+              Positioned.fill(
+                child: LiquidGlassLayer(
+                  settings: _flat(_bodyOnly.copyWith(grain: 1)),
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        left: 70,
+                        top: 20,
+                        child: Transform.rotate(
+                          angle: angle,
+                          child: LiquidGlass(
+                            appearance: LiquidGlassAppearance.seaGlass(
+                              color: SeaGlassColors.white.withValues(
+                                alpha: .5,
+                              ),
+                            ),
+                            shape: const LiquidOval(),
+                            child: const SizedBox.square(dimension: 100),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+
+        final upright = await _renderDevicePixels(tester, disc(0));
+        final turned = await _renderDevicePixels(tester, disc(math.pi / 2));
+        // Center (120, 70) pt is device pixel corner (240, 140). The pixel
+        // at (i, j) from it moves to (-j - 1, i) under a clockwise quarter
+        // turn.
+        var maxDifference = 0;
+        var grainRange = 0;
+        for (var j = -70; j < 70; j += 3) {
+          for (var i = -70; i < 70; i += 3) {
+            final before = upright(240 + i, 140 + j);
+            final after = turned(240 - j - 1, 140 + i);
+            for (var c = 0; c < 3; c++) {
+              maxDifference = math.max(
+                maxDifference,
+                (before[c] - after[c]).abs(),
+              );
+            }
+            grainRange = math.max(
+              grainRange,
+              (before[1] - upright(240, 140)[1]).abs(),
+            );
+          }
+        }
+        // The grain is visible, and it turned with the disc.
+        expect(grainRange, greaterThan(6));
         expect(maxDifference, lessThanOrEqualTo(2));
       },
       skip: skipProperGlassTests,

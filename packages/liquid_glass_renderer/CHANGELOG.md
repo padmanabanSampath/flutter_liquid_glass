@@ -18,6 +18,12 @@
   shape's frost moves with that shape and cross-fades seamlessly across a
   blend group's bridge, and `LiquidStretch.seaGlass` gives a stiffer,
   heavier response.
+- **Frost on the shape's surface.** Each shape's frost is evaluated in the
+  shape's own frame, so it turns and stretches with a rotated or scaled
+  shape, not only moves with it.
+- **FakeGlass thickness.** FakeGlass sea glass now deepens toward the
+  center like real glass: the color filter applies the thin rim's face and
+  a multiply-blended thickness pass darkens toward the full-thickness face.
 - **Lean frost.** `SeaGlassFinish.stochasticFrost` (on by default) renders
   the frost in the glass pass with scattered samples, so sea glass layers
   need no blur pass.

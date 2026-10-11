@@ -132,14 +132,17 @@ List<double> fakeGlassFaceMatrix({
   return result..addAll([0, 0, 0, opacity.clamp(0.0, 1.0), 0]);
 }
 
-/// Share of the full body color a sea glass face carries on average; the
-/// real renderer varies it from the thin rim to the full-thickness center.
-const _seaGlassMeanPath = 0.8;
+/// Share of the full body color the paper-thin rim of a sea glass face
+/// carries, and how much more the frost scatters there (see
+/// `kSeaGlassRimPath` and `seaGlassFace` in the final render shader).
+const _seaGlassRimPath = 0.3;
+const _seaGlassRimScatter = 1.6;
 
-/// The sea glass face at its mean thickness as a 4x5 color matrix: the
-/// saturated backdrop filtered by the body, plus the light the frost
-/// scatters in the body's color, brighter over light backdrops. This is the
-/// final render shader's face without the rim, which the surface pass adds.
+/// The sea glass face of the thin rim as a 4x5 color matrix: the saturated
+/// backdrop filtered by the body, plus the light the frost scatters in the
+/// body's color, brighter over light backdrops. The surface pass's
+/// thickness pass deepens it toward the center with a multiply blend, and
+/// draws the rim glow, grain and sparkles on top.
 @internal
 List<double> fakeGlassSeaGlassMatrix({
   required SeaGlassFinish finish,
@@ -151,17 +154,16 @@ List<double> fakeGlassSeaGlassMatrix({
   const luminance = [0.2126, 0.7152, 0.0722];
   final sizeResponse = seaGlassSizeResponse(finish, shortSide);
   final density = body.a.clamp(0.0, 1.0) * sizeResponse.path;
-  final scatter = (finish.effectiveScatter * sizeResponse.scatter).clamp(
-    0.0,
-    1.0,
-  );
+  final scatter =
+      (finish.effectiveScatter * sizeResponse.scatter * _seaGlassRimScatter)
+          .clamp(0.0, 1.0);
   final bodyColor = [body.r, body.g, body.b];
   final result = <double>[];
   for (var row = 0; row < 3; row++) {
     final transmittance = math
         .pow(
           bodyColor[row].clamp(0.02, 1.0),
-          density * _seaGlassMeanPath,
+          density * _seaGlassRimPath,
         )
         .toDouble();
     final glow = 1 + (transmittance - 1) * 0.6;
