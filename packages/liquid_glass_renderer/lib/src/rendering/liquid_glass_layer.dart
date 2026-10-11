@@ -601,9 +601,7 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
           1 - settings.effectiveBackdropShrink,
           appearance.saturation,
         ])
-        ..setOffset(
-          const Offset(0, 1),
-        )
+        ..setOffset(settings.lightDirection)
         ..setColor(const Color.fromARGB(255, 255, 255, 255))
         ..setColor(
           Color.fromARGB(
@@ -666,12 +664,37 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
               : GlassColorParameters.ios27Light.toShaderParameters(),
       ]);
     });
+    // Float index 159, after the color-model slots: the sea glass finish.
+    // Its depth is clamped to the edge distance the matte can decode.
+    final seaGlass = settings.seaGlassFinish;
+    shader.setFloatUniforms(initialIndex: 159, (value) {
+      value.setFloats([
+        seaGlass.effectiveStrength,
+        min(
+              seaGlass.effectiveDepth,
+              4 * settings.effectiveEdgeDistanceRange,
+            ) *
+            devicePixelRatio,
+        seaGlass.effectiveScatter,
+        seaGlass.effectiveRimGlow,
+        seaGlass.effectiveGrain,
+        seaGlass.effectiveGrainSize * devicePixelRatio,
+        seaGlass.effectiveSparkle,
+        seaGlass.effectivePitting * devicePixelRatio,
+      ]);
+    });
+    // Float index 295, after the shape frames: the scattered frost radius.
+    shader.setFloat(295, _scatteredFrostRadius * devicePixelRatio);
   }
 
   /// Largest frost, in device pixels, folded into the final pass instead of
   /// a separate blur pass. Enabling the blur pass costs about four command
   /// buffers per frame on Metal regardless of its radius.
   static const double shaderSofteningMaxDeviceSigma = 1.25;
+
+  /// Shapes whose boxes the sea glass frost anchors to; a layer renders at
+  /// most this many.
+  static const int maxSeaGlassShapes = 16;
 
   /// Whether the frost is small enough for the final pass's softening kernel.
   bool get softensInShader {
@@ -680,8 +703,32 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
         frost * devicePixelRatio <= shaderSofteningMaxDeviceSigma;
   }
 
+  /// Whether a sea glass finish scatters the frost inside the final pass
+  /// instead of a blur pass (see [SeaGlassFinish.stochasticFrost]).
+  ///
+  /// The final pass scatters only on its single-sample path, so visible
+  /// dispersion keeps the blur pass. Mirrors the shader's
+  /// kDispersionSubpixelThreshold test.
+  bool get frostsInShader {
+    final finish = settings.seaGlassFinish;
+    final dispersionSpread =
+        settings.dispersion.abs() *
+        settings.effectiveDisplacementScale *
+        devicePixelRatio;
+    return finish.isEnabled &&
+        finish.stochasticFrost &&
+        _frostSigma > 0 &&
+        !softensInShader &&
+        dispersionSpread <= 0.25;
+  }
+
+  /// Radius, in logical pixels, of the disc the scattered frost samples:
+  /// a uniform disc of radius 2 sigma has the blur's standard deviation.
+  double get _scatteredFrostRadius => frostsInShader ? 2 * _frostSigma : 0;
+
   /// Sigma of the separate backdrop blur pass; `0` when there is none.
-  double get blurPassSigma => softensInShader ? 0 : _frostSigma;
+  double get blurPassSigma =>
+      softensInShader || frostsInShader ? 0 : _frostSigma;
 
   double get _frostSigma => settings.effectiveFrost;
 
@@ -792,6 +839,11 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
   /// shader
   Rect _geometryMatteBounds = Rect.zero;
   Offset _materialCenterInMatte = Offset.zero;
+
+  /// The encoded shapes' frames for the sea glass frost, eight values each:
+  /// the matte-space center and the half size in the shape's own device
+  /// pixels, then the inverse affine basis from matte to shape space.
+  List<double> _shapeBoxesInMatte = const [];
   // The matte and material map fill the top-left of textures that only grow.
   Size _geometryTextureSize = Size.zero;
   Size _materialTextureSize = const Size(1, 1);
@@ -865,6 +917,7 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
       _geometryTextureSize = result.textureSize;
       _materialTextureSize = result.materialTextureSize;
       _materialCenterInMatte = result.materialCenter;
+      _shapeBoxesInMatte = result.shapeBoxes;
       _setShapeAppearances(result.appearances);
       _rememberEncodedGeometry(bounds);
       _bindGeometryShader(result.image);
@@ -905,6 +958,16 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
     if (delta == null) return false;
     _geometryMatteBounds = _geometryMatteBounds.shift(delta);
     _materialCenterInMatte += delta;
+    final shift = delta * devicePixelRatio;
+    _shapeBoxesInMatte = [
+      for (var i = 0; i < _shapeBoxesInMatte.length; i++)
+        _shapeBoxesInMatte[i] +
+            switch (i % 8) {
+              0 => shift.dx,
+              1 => shift.dy,
+              _ => 0,
+            },
+    ];
     _rememberEncodedGeometry(bounds);
     return true;
   }
@@ -977,6 +1040,7 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
             _geometryTextureSize = gpuResult.textureSize;
             _materialTextureSize = gpuResult.materialTextureSize;
             _materialCenterInMatte = gpuResult.materialCenter;
+            _shapeBoxesInMatte = gpuResult.shapeBoxes;
             _setShapeAppearances(gpuResult.appearances);
             _rememberEncodedGeometry(geometryBounds);
           }
@@ -1038,6 +1102,18 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
       })
       ..setFloatUniforms(initialIndex: 34, (value) {
         value.setOffset(_materialCenterInMatte * devicePixelRatio);
+      })
+      // Float index 167, after the sea glass finish: the shape frames its
+      // frost belongs to. A negative half size ends the list.
+      ..setFloatUniforms(initialIndex: 167, (value) {
+        value.setFloats([
+          ..._shapeBoxesInMatte.take(maxSeaGlassShapes * 8),
+          for (
+            var i = _shapeBoxesInMatte.length;
+            i < maxSeaGlassShapes * 8;
+            i += 8
+          ) ...const [0.0, 0.0, -1.0, -1.0, 1.0, 0.0, 0.0, 1.0],
+        ]);
       })
       // Float index 59, after uBackdropBounds.
       ..setFloatUniforms(initialIndex: 59, (value) {
@@ -1432,17 +1508,22 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
   }
 
   /// How far outside the material the composed filter reads the backdrop:
-  /// the blur kernel (3 sigma), the peak edge displacement including its
-  /// dispersion, and, with [LiquidGlassSettings.backdropShrink], the extra
-  /// content revealed on the face. A `LiquidGlassCapture` must contain this
-  /// reach or the filter samples its own edge.
+  /// the blur kernel (3 sigma, or the scattered frost's disc), the peak edge
+  /// displacement including its
+  /// dispersion and any sea glass pitting, and, with
+  /// [LiquidGlassSettings.backdropShrink], the extra content revealed on the
+  /// face. A `LiquidGlassCapture` must contain this reach or the filter
+  /// samples its own edge.
   double backdropSamplingReach(Rect material) {
     final blur = blurPassSigma > 0
         ? blurPassSigma * 3 + 1 / devicePixelRatio
+        : frostsInShader
+        ? _scatteredFrostRadius + 1 / devicePixelRatio
         : (softensInShader ? 1 / devicePixelRatio : 0.0);
     final displacement =
         settings.effectiveDisplacementScale *
-        (1 + settings.dispersion.abs() * 0.5);
+            (1 + settings.dispersion.abs() * 0.5) +
+        settings.seaGlassFinish.samplingReach;
     final scale = 1 - settings.effectiveBackdropShrink;
     final revealed = (1 / scale - 1) * max(material.width, material.height) / 2;
     return blur + displacement + revealed;
@@ -1541,6 +1622,7 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
       _shapeData.clear();
       _rseData.clear();
       _boundsData.clear();
+      final shapeBoxes = <double>[];
       final appearances = <LiquidGlassAppearance>[];
       var numShapes = 0;
       var shortSide = double.infinity;
@@ -1619,6 +1701,16 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
             ..add(center.dy - halfExtents.height)
             ..add(center.dx + halfExtents.width)
             ..add(center.dy + halfExtents.height);
+          shapeBoxes.addAll([
+            center.dx,
+            center.dy,
+            size.width * devicePixelRatio / 2,
+            size.height * devicePixelRatio / 2,
+            inverse00,
+            inverse01,
+            inverse10,
+            inverse11,
+          ]);
           final blendMarker = firstInGroup
               ? -(geometry.blend * devicePixelRatio + 1)
               : geometry.blend * devicePixelRatio;
@@ -1685,6 +1777,7 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
         image: result.image,
         materialImage: renderer.materialImage,
         materialCenter: materialCenter,
+        shapeBoxes: List.unmodifiable(shapeBoxes),
         textureSize: Size(
           result.textureWidth.toDouble(),
           result.textureHeight.toDouble(),
@@ -1716,6 +1809,7 @@ typedef _GpuGeometryFrame = ({
   ui.Image? materialImage,
   Rect matteBounds,
   Offset materialCenter,
+  List<double> shapeBoxes,
   List<LiquidGlassAppearance> appearances,
 });
 

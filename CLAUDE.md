@@ -88,13 +88,14 @@ The liquid glass effect works by capturing and distorting background pixels thro
 5. **Shader Pipeline** (`lib/src/shaders.dart` and `lib/assets/shaders/`):
    - `gpu/geometry_fragment.glsl` (Flutter GPU): renders every shape of a layer into the matte
    - `gpu/material_gradient_fragment.glsl` (Flutter GPU): low-resolution per-shape appearance map
-   - `liquid_glass_final_render{,_material,_tint}.frag`: the backdrop pass (refraction, frost, lighting, color)
+   - `liquid_glass_final_render{,_material,_tint}.frag`: the backdrop pass (refraction, frost, lighting, color, sea glass)
    - `fake_glass_surface.frag`, `fake_glass_backdrop_edge.frag`: FakeGlass
 
 ### Key Components
 
 - **Shapes** (`lib/src/liquid_shape.dart`): Defines glass shape types (RoundedSuperellipse, Oval, RoundedRectangle)
 - **Settings** (`lib/src/liquid_glass_settings.dart`): Configures glass appearance (refraction, frost, lighting)
+- **Sea glass** (`lib/src/sea_glass.dart`): `SeaGlassFinish` (tumbled, frosted surface on `LiquidGlassSettings.seaGlassFinish`) and the `SeaGlassColors` body palette; the tint becomes the glass body. `SeaGlassFinish.none()` (the default) must keep output byte-identical
 - **FakeGlass** (`lib/src/fake_glass.dart`): Lightweight alternative using backdrop filters instead of shaders
 - **GlassGlow** (`lib/src/glass_glow.dart`): Touch-responsive glow effects
 - **LiquidStretch** (`lib/src/stretch.dart`): Squash and stretch animations
@@ -146,7 +147,8 @@ Set `debugPaintLiquidGlassGeometry = true` (exported from `liquid_glass_renderer
 
 Shader source files are in `packages/liquid_glass_renderer/lib/assets/shaders/`:
 - Main shader files: `*.frag`
-- Shared utilities: `*.glsl` (`render.glsl`, `liquid_glass_final_render_core.glsl`, `fake_glass_shape.glsl`; Flutter GPU includes in `gpu/`: `sdf.glsl`, `material_sdf.glsl`, `displacement_encoding.glsl`)
+- Shared utilities: `*.glsl` (`render.glsl`, `liquid_glass_final_render_core.glsl`, `fake_glass_shape.glsl`, `sea_glass.glsl`; Flutter GPU includes in `gpu/`: `sdf.glsl`, `material_sdf.glsl`, `displacement_encoding.glsl`)
+- Asset builds only notice changes to the `.frag` entry points: after editing an included `.glsl`, `touch` the `.frag` files or tests keep running the stale shader
 - Flutter GPU shaders are listed in `liquid_glass_renderer.shaderbundle.json` and built by `hook/build.dart`
 
 Shaders are compiled by Flutter and loaded via `flutter_shaders` package. Edit `.frag` files and run `flutter run` to hot reload changes (though shaders typically require full restart).

@@ -4,6 +4,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/widgets.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_appearance.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_render_scope.dart';
+import 'package:liquid_glass_renderer/src/sea_glass.dart';
 import 'package:meta/meta.dart';
 
 /// Material parameters for the liquid-glass compositor.
@@ -31,6 +32,8 @@ class LiquidGlassSettings with Equatable {
     this.contourDirectionality = 0.77,
     this.bevelShadowStrength = 0.036,
     this.tintAmount = 0.0,
+    this.lightAngle = 0.0,
+    this.seaGlassFinish = const SeaGlassFinish.none(),
   });
 
   /// Restores a material vector produced by [toJson].
@@ -57,8 +60,40 @@ class LiquidGlassSettings with Equatable {
         defaults.bevelShadowStrength,
       ),
       tintAmount: number('tintAmount', defaults.tintAmount),
+      lightAngle: number('lightAngle', defaults.lightAngle),
+      seaGlassFinish: SeaGlassFinish.fromJson(json['seaGlassFinish']),
     );
   }
+
+  /// Sea glass: tumbled, frosted, colored glass with a soft rim.
+  ///
+  /// The lens is a rounded pebble rather than iOS 27's flat face with a
+  /// deep bevel: the whole face of a small shape curves, and larger shapes
+  /// keep a 36 pt curved shoulder, so they refract more, as Apple's thicker
+  /// glass does. It bends gently, so the glass stays flat and light. The
+  /// crisp glint and dark border are dimmed to suit a matte surface, and
+  /// there is no inner bevel shadow. The frost is light enough that the
+  /// backdrop stays readable; raise [frost] (and use
+  /// [SeaGlassFinish.frosted]) for a milkier pebble.
+  ///
+  /// Give each shape its body color with [LiquidGlassAppearance.seaGlass].
+  factory LiquidGlassSettings.seaGlass({
+    SeaGlassFinish finish = const SeaGlassFinish(),
+    double frost = 2,
+    double refractionHeight = 36,
+    double refractionAmount = 16,
+    double highlight = 0.3,
+  }) => LiquidGlassSettings(
+    refractionHeight: refractionHeight,
+    refractionAmount: refractionAmount,
+    refractionFitsShape: false,
+    frost: frost,
+    highlight: highlight,
+    contourStrength: 0.12,
+    contourDirectionality: 1,
+    bevelShadowStrength: 0,
+    seaGlassFinish: finish,
+  );
 
   /// Light-mode settings fitted to an iOS 27 toolbar capsule.
   ///
@@ -282,6 +317,34 @@ class LiquidGlassSettings with Equatable {
   /// one uniform per layer and adds no per-pixel work.
   final double tintAmount;
 
+  /// Where the light comes from, in radians clockwise from straight above.
+  ///
+  /// The glint sits on the two walls along the light, the dark border where
+  /// it fades, and the inner shadow below the lit wall; sea glass turns its
+  /// rim glow toward the light and its pits glint as they face it. `0`, the
+  /// default, is the overhead light of iOS 27's resting glass.
+  ///
+  /// Apple's glass moves its highlights with the device. Feed this from the
+  /// device's tilt (for example a gyroscope) or from a gesture to do the
+  /// same; it is one uniform and changing it never re-renders the geometry.
+  final double lightAngle;
+
+  /// The tumbled sea glass surface, or [SeaGlassFinish.none] for regular
+  /// liquid glass.
+  ///
+  /// The finish is shared by every shape in the layer. With it, the
+  /// appearance tint becomes the color of the glass body instead of a wash
+  /// (see [LiquidGlassAppearance.seaGlass]). It is two uniforms per layer;
+  /// a disabled finish adds no per-pixel work.
+  final SeaGlassFinish seaGlassFinish;
+
+  /// Unit vector along which the light travels, in logical pixel space:
+  /// straight down for the default [lightAngle].
+  @internal
+  Offset get lightDirection => lightAngle == 0
+      ? const Offset(0, 1)
+      : Offset(-math.sin(lightAngle), math.cos(lightAngle));
+
   /// Effective bevel width; never negative.
   double get effectiveRefractionHeight => math.max(0, refractionHeight);
 
@@ -327,6 +390,8 @@ class LiquidGlassSettings with Equatable {
     double? contourDirectionality,
     double? bevelShadowStrength,
     double? tintAmount,
+    double? lightAngle,
+    SeaGlassFinish? seaGlassFinish,
   }) => LiquidGlassSettings(
     refractionHeight: refractionHeight ?? this.refractionHeight,
     refractionAmount: refractionAmount ?? this.refractionAmount,
@@ -339,6 +404,8 @@ class LiquidGlassSettings with Equatable {
     contourDirectionality: contourDirectionality ?? this.contourDirectionality,
     bevelShadowStrength: bevelShadowStrength ?? this.bevelShadowStrength,
     tintAmount: tintAmount ?? this.tintAmount,
+    lightAngle: lightAngle ?? this.lightAngle,
+    seaGlassFinish: seaGlassFinish ?? this.seaGlassFinish,
   );
 
   /// Serializes the public material vector for example presets and tooling.
@@ -354,6 +421,9 @@ class LiquidGlassSettings with Equatable {
     'contourDirectionality': contourDirectionality,
     'bevelShadowStrength': bevelShadowStrength,
     'tintAmount': tintAmount,
+    if (lightAngle != 0) 'lightAngle': lightAngle,
+    if (seaGlassFinish != const SeaGlassFinish.none())
+      'seaGlassFinish': seaGlassFinish.toJson(),
   };
 
   @override
@@ -369,6 +439,8 @@ class LiquidGlassSettings with Equatable {
     contourDirectionality,
     bevelShadowStrength,
     tintAmount,
+    lightAngle,
+    seaGlassFinish,
   ];
 }
 

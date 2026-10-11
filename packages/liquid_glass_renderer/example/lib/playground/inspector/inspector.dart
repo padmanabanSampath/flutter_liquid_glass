@@ -56,13 +56,18 @@ class _SceneControl extends StatelessWidget {
     StageScene.blend: 'Drag the shapes into each other.',
     StageScene.colors: 'Four appearances in one layer, blending as they merge.',
     StageScene.loupe: 'Drag the loupes across the backdrop.',
+    StageScene.seaGlass: 'Quick settings in tumbled sea glass. Tap a tile.',
   };
 
   void _select(StageScene scene) {
     state.scene.value = scene;
-    if (scene == StageScene.loupe &&
-        state.material.value.style != GlassStyle.loupe) {
-      state.material.value = state.material.value.withStyle(GlassStyle.loupe);
+    final style = switch (scene) {
+      StageScene.loupe => GlassStyle.loupe,
+      StageScene.seaGlass => GlassStyle.seaGlass,
+      _ => null,
+    };
+    if (style != null && state.material.value.style != style) {
+      state.material.value = state.material.value.withStyle(style);
     }
   }
 

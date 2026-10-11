@@ -46,12 +46,102 @@ uniform vec4 uRseSemiAxisAndRadii;
 // strongly while regular glass brightens mostly the transmitted chroma.
 uniform float uGlintFaceGain;
 uniform float uGlintVibrancy;
+// Sea glass finish (SeaGlassFinish), in logical pixels. The backdrop
+// filter applies the face of the thin rim. A thickness pass, drawn with a
+// multiply blend before the surface, deepens it toward the center as the
+// final render shader does; the surface then adds the rim glow, grain and
+// sparkles.
+//   uSeaGlassBody:    strength, depth, scatter, rimGlow
+//   uSeaGlassSurface: grain, grainSize, sparkle, 1 for the thickness pass
+//   uSeaGlassColor:   body color, density
+uniform vec4 uSeaGlassBody;
+uniform vec4 uSeaGlassSurface;
+uniform vec4 uSeaGlassColor;
 
 const vec3 LUMA_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
 
 layout(location = 0) out vec4 fragColor;
 
 #include "fake_glass_shape.glsl"
+#include "sea_glass.glsl"
+
+// The sea glass face over white at a thickness, as the final render shader
+// computes it: the body filters the light and the frost scatters part of
+// it in the body's color, more at the grazing rim.
+vec3 seaGlassWhiteFace(
+  float thickness,
+  vec3 bodyColor,
+  float density,
+  vec2 sizeResponse
+) {
+  vec3 transmittance = pow(
+      bodyColor,
+      vec3(density * sizeResponse.x * mix(0.3, 1.0, thickness))
+  );
+  float scatter = clamp(
+      uSeaGlassBody.z * sizeResponse.y * mix(1.6, 1.0, thickness),
+      0.0,
+      1.0
+  );
+  vec3 glow = mix(vec3(1.0), transmittance, 0.6);
+  return transmittance * (1.0 - scatter) + glow * scatter;
+}
+
+// How much the face at this thickness keeps of the rim face the backdrop
+// filter applied: below one toward the thicker center, per channel, for a
+// multiply blend.
+vec3 seaGlassThicknessRatio(float inward) {
+  float thickness = seaGlassThickness(inward, uSeaGlassBody.y);
+  vec2 sizeResponse = seaGlassSizeResponse(
+      0.5 * min(uSize.x, uSize.y),
+      uSeaGlassBody.y
+  );
+  float density = clamp(uSeaGlassColor.a, 0.0, 1.0);
+  vec3 bodyColor = clamp(uSeaGlassColor.rgb, vec3(0.02), vec3(1.0));
+  vec3 ratio = seaGlassWhiteFace(thickness, bodyColor, density, sizeResponse) /
+      max(
+        seaGlassWhiteFace(0.0, bodyColor, density, sizeResponse),
+        vec3(1e-3)
+      );
+  return mix(vec3(1.0), min(ratio, vec3(1.0)), clamp(uSeaGlassBody.x, 0.0, 1.0));
+}
+
+// The varying part of the sea glass face, premultiplied, to composite over
+// the face the backdrop filter and the thickness pass produced.
+vec4 seaGlassOverlay(vec2 position, float inward, float facing) {
+  float strength = clamp(uSeaGlassBody.x, 0.0, 1.0);
+  float thickness = seaGlassThickness(inward, uSeaGlassBody.y);
+  vec2 sizeResponse = seaGlassSizeResponse(
+      0.5 * min(uSize.x, uSize.y),
+      uSeaGlassBody.y
+  );
+  float density = clamp(uSeaGlassColor.a, 0.0, 1.0) * sizeResponse.x;
+  vec3 bodyColor = clamp(uSeaGlassColor.rgb, vec3(0.02), vec3(1.0));
+  vec3 pastel = mix(vec3(1.0), pow(bodyColor, vec3(0.4 * density)), 0.85);
+  float rimLight = mix(0.4, 1.0, smoothstep(-1.0, 1.0, facing));
+  float rimGlow = clamp(uSeaGlassBody.w, 0.0, 1.0) * (1.0 - thickness) *
+      rimLight * 0.6;
+  vec4 overlay = vec4(pastel * rimGlow, rimGlow);
+
+  highp float grainSize = max(uSeaGlassSurface.y, 0.25);
+  float grain = seaGlassPits(position, grainSize).z *
+      clamp(uSeaGlassSurface.x, 0.0, 1.0) * 0.36;
+  // Positive grain lightens and negative grain darkens the face.
+  vec4 speck = grain > 0.0
+      ? vec4(vec3(grain), grain)
+      : vec4(vec3(0.0), -grain);
+  overlay = speck + overlay * (1.0 - speck.a);
+
+  float sparkle = seaGlassSparkle(
+      position,
+      grainSize,
+      uPixelSize,
+      normalize(uLightDirection + vec2(0.00001))
+  ) *
+      clamp(uSeaGlassSurface.z, 0.0, 1.0);
+  overlay = vec4(vec3(sparkle), sparkle) + overlay * (1.0 - sparkle);
+  return overlay * strength;
+}
 
 float shapeDistance(vec2 p) {
   return sdFakeGlassShape(
@@ -91,6 +181,13 @@ void main() {
   vec2 position = FlutterFragCoord().xy - uSize * 0.5;
   float distance = shapeDistance(position);
   float inward = max(-distance, 0.0);
+  if (uSeaGlassSurface.w > 0.5) {
+    // The thickness pass: drawn with a multiply blend, so outside the
+    // shape it is transparent and leaves the backdrop alone.
+    float coverage = clamp(0.5 - distance / uPixelSize, 0.0, 1.0);
+    fragColor = vec4(seaGlassThicknessRatio(inward) * coverage, coverage);
+    return;
+  }
 
   vec2 normal = shapeNormal(position);
   vec2 lightDirection = normalize(uLightDirection + vec2(0.00001));
@@ -200,6 +297,11 @@ void main() {
       uFaceEmission * bevelShadow * (1.0 - tintAlpha) *
           (1.0 - backdropContourAbsorption);
   float litAlpha = materialAlpha;
+  if (uSeaGlassBody.x > 0.0) {
+    vec4 seaGlass = seaGlassOverlay(position, inward, facing);
+    litPremultiplied = seaGlass.rgb + litPremultiplied * (1.0 - seaGlass.a);
+    litAlpha = seaGlass.a + litAlpha * (1.0 - seaGlass.a);
+  }
   vec3 faceProxy = uTint.rgb * tintAlpha + uFaceEmission;
   vec3 glintTarget = vec3(uGlintLuminance) +
       uGlintFaceGain * faceProxy +

@@ -100,11 +100,15 @@ void paintFakeGlassSurface(
   bool exteriorOnly = false,
 }) {
   final appearanceVisibility = appearance.visibility.clamp(0.0, 1.0);
+  final seaGlass = settings.seaGlassFinish;
   final surfaceTint = appearance.colorModel.approximateSurfaceTint(
     appearance.tint,
   );
+  // Under sea glass the tint is the body, which the backdrop filter applies,
+  // so the wash fades out with the finish's strength.
   final tint = surfaceTint.withValues(
-    alpha: surfaceTint.a * appearanceVisibility,
+    alpha:
+        surfaceTint.a * appearanceVisibility * (1 - seaGlass.effectiveStrength),
   );
   final faceEmission =
       appearance.colorModel
@@ -125,56 +129,83 @@ void paintFakeGlassSurface(
     LiquidRoundedSuperellipse(:final borderRadius) => borderRadius,
   };
   final opticalThickness = settings.effectiveEdgeDistanceRange;
-  shader.setFloatUniforms((uniforms) {
-    uniforms
-      ..setSize(size)
-      ..setFloats([shapeType, cornerRadius])
-      ..setColor(tint)
-      ..setFloats([
-        settings.highlight * appearanceVisibility,
-        GlassRim.highlightWidth,
-        opticalThickness,
-        GlassRim.highlightWrap,
-        GlassRim.highlightOppositeStrength * appearanceVisibility,
-        settings.contourStrength *
-            appearance.colorModel.contourScale(
-              size.shortestSide,
-              settings.effectiveTintAmount,
-            ) *
-            appearanceVisibility,
-        settings.contourWidth,
-        0, // contour transmittance
-        0, // contour offset
-        settings.contourDirectionality,
-        settings.bevelShadowStrength * appearanceVisibility,
-        GlassRim.bevelShadowDepth,
-        GlassRim.bevelShadowOffset,
-        GlassRim.bevelShadowDirectionality,
-        0, // bevel shadow size response
-      ])
-      ..setOffset(const Offset(0, 1))
-      ..setFloat(1 / math.max(devicePixelRatio, 0.01))
-      ..setFloat(exteriorOnly ? 1 : 0)
-      ..setFloat(appearance.colorModel.fakeGlintLuminance)
-      ..setFloats([
-        faceEmission.r * appearanceVisibility,
-        faceEmission.g * appearanceVisibility,
-        faceEmission.b * appearanceVisibility,
-      ])
-      ..setFloats(
-        shape is LiquidRoundedSuperellipse
-            ? roundedSuperellipseParameters(size, cornerRadius)
-            : _noSuperellipse,
-      )
-      ..setFloat(appearance.colorModel.fakeGlintFaceGain)
-      ..setFloat(appearance.colorModel.fakeGlintVibrancy);
-  });
+  // The engine copies a fragment shader's uniforms when a draw records it,
+  // so one shader serves both passes.
+  void writeUniforms({required bool thicknessPass}) =>
+      shader.setFloatUniforms((uniforms) {
+        uniforms
+          ..setSize(size)
+          ..setFloats([shapeType, cornerRadius])
+          ..setColor(tint)
+          ..setFloats([
+            settings.highlight * appearanceVisibility,
+            GlassRim.highlightWidth,
+            opticalThickness,
+            GlassRim.highlightWrap,
+            GlassRim.highlightOppositeStrength * appearanceVisibility,
+            settings.contourStrength *
+                appearance.colorModel.contourScale(
+                  size.shortestSide,
+                  settings.effectiveTintAmount,
+                ) *
+                appearanceVisibility,
+            settings.contourWidth,
+            0, // contour transmittance
+            0, // contour offset
+            settings.contourDirectionality,
+            settings.bevelShadowStrength * appearanceVisibility,
+            GlassRim.bevelShadowDepth,
+            GlassRim.bevelShadowOffset,
+            GlassRim.bevelShadowDirectionality,
+            0, // bevel shadow size response
+          ])
+          ..setOffset(settings.lightDirection)
+          ..setFloat(1 / math.max(devicePixelRatio, 0.01))
+          ..setFloat(exteriorOnly ? 1 : 0)
+          ..setFloat(appearance.colorModel.fakeGlintLuminance)
+          ..setFloats([
+            faceEmission.r * appearanceVisibility,
+            faceEmission.g * appearanceVisibility,
+            faceEmission.b * appearanceVisibility,
+          ])
+          ..setFloats(
+            shape is LiquidRoundedSuperellipse
+                ? roundedSuperellipseParameters(size, cornerRadius)
+                : _noSuperellipse,
+          )
+          ..setFloat(appearance.colorModel.fakeGlintFaceGain)
+          ..setFloat(appearance.colorModel.fakeGlintVibrancy)
+          ..setFloats([
+            seaGlass.effectiveStrength * appearanceVisibility,
+            seaGlass.effectiveDepth,
+            seaGlass.effectiveScatter,
+            seaGlass.effectiveRimGlow,
+            seaGlass.effectiveGrain,
+            seaGlass.effectiveGrainSize,
+            seaGlass.effectiveSparkle,
+            if (thicknessPass) 1 else 0,
+            appearance.tint.r,
+            appearance.tint.g,
+            appearance.tint.b,
+            appearance.tint.a,
+          ]);
+      });
   final contourOutset = fakeGlassSurfaceOutset(settings);
-  canvas.drawRect(
-    fakeGlassSurfaceQuad(
-      (Offset.zero & size).inflate(contourOutset),
-      canvas.getTransform(),
-    ),
-    Paint()..shader = shader,
+  final quad = fakeGlassSurfaceQuad(
+    (Offset.zero & size).inflate(contourOutset),
+    canvas.getTransform(),
   );
+  if (seaGlass.isEnabled && !exteriorOnly && appearanceVisibility > 0) {
+    // The backdrop filter applied the face of the thin rim; multiplying by
+    // the thicker face's share deepens the body toward the center.
+    writeUniforms(thicknessPass: true);
+    canvas.drawRect(
+      quad,
+      Paint()
+        ..shader = shader
+        ..blendMode = BlendMode.multiply,
+    );
+  }
+  writeUniforms(thicknessPass: false);
+  canvas.drawRect(quad, Paint()..shader = shader);
 }

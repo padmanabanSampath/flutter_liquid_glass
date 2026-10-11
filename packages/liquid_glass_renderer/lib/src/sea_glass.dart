@@ -1,0 +1,335 @@
+import 'dart:math' as math;
+
+import 'package:equatable/equatable.dart';
+import 'package:flutter/painting.dart';
+import 'package:liquid_glass_renderer/src/liquid_glass_appearance.dart';
+import 'package:liquid_glass_renderer/src/liquid_glass_settings.dart';
+import 'package:meta/meta.dart';
+
+/// The tumbled, frosted surface of sea glass.
+///
+/// Sea glass is ordinary glass whose surface the sea has pitted into a fine
+/// frost. It stays translucent, but the frost scatters part of the light
+/// into a soft milky veil, sprinkles the face with tiny glints and turns the
+/// rounded rim lighter than the body. The glass itself is colored throughout,
+/// so thicker glass absorbs more: the face is deepest in color at its center
+/// and pales toward the thin rim.
+///
+/// Start from [LiquidGlassSettings.seaGlass] (or set
+/// [LiquidGlassSettings.seaGlassFinish] yourself) and give each shape its
+/// body color with [LiquidGlassAppearance.seaGlass]. The finish is shared by
+/// every shape of a layer; the body color can differ per shape.
+///
+/// [strength] cross-fades the whole finish: `0` is the regular liquid-glass
+/// face and costs nothing, `1` is full sea glass. Distances are logical
+/// pixels; amounts use the `0` to `1` range.
+///
+/// See also [SeaGlassColors] for body colors sampled from real sea glass.
+class SeaGlassFinish with Equatable {
+  /// Creates a sea glass finish.
+  ///
+  /// The defaults are a light frost that keeps the backdrop readable, which
+  /// is clearer than most frosted UI glass.
+  const SeaGlassFinish({
+    this.strength = 1,
+    this.depth = 18,
+    this.scatter = 0.12,
+    this.rimGlow = 0.35,
+    this.grain = 0.5,
+    this.grainSize = 1.4,
+    this.sparkle = 0.35,
+    this.pitting = 0.6,
+    this.stochasticFrost = true,
+  });
+
+  /// No sea glass: the regular liquid-glass face.
+  const SeaGlassFinish.none()
+    : strength = 0,
+      depth = 18,
+      scatter = 0.12,
+      rimGlow = 0.35,
+      grain = 0.5,
+      grainSize = 1.4,
+      sparkle = 0.35,
+      pitting = 0.6,
+      stochasticFrost = true;
+
+  /// A heavily tumbled, milkier pebble: more scatter, coarser grain and a
+  /// brighter rim. Pair it with a larger [LiquidGlassSettings.frost].
+  const SeaGlassFinish.frosted()
+    : strength = 1,
+      depth = 22,
+      scatter = 0.45,
+      rimGlow = 0.5,
+      grain = 0.7,
+      grainSize = 1.8,
+      sparkle = 0.45,
+      pitting = 1.6,
+      stochasticFrost = true;
+
+  /// A barely tumbled shard that is still mostly clear.
+  const SeaGlassFinish.clear()
+    : strength = 1,
+      depth = 14,
+      scatter = 0.05,
+      rimGlow = 0.25,
+      grain = 0.3,
+      grainSize = 1.2,
+      sparkle = 0.2,
+      pitting = 0.4,
+      stochasticFrost = true;
+
+  /// Restores a finish produced by [toJson].
+  factory SeaGlassFinish.fromJson(Object? json) {
+    if (json is! Map<String, Object?>) return const SeaGlassFinish.none();
+    const defaults = SeaGlassFinish();
+    double number(String key, double fallback) =>
+        (json[key] as num?)?.toDouble() ?? fallback;
+    return SeaGlassFinish(
+      strength: number('strength', defaults.strength),
+      depth: number('depth', defaults.depth),
+      scatter: number('scatter', defaults.scatter),
+      rimGlow: number('rimGlow', defaults.rimGlow),
+      grain: number('grain', defaults.grain),
+      grainSize: number('grainSize', defaults.grainSize),
+      sparkle: number('sparkle', defaults.sparkle),
+      pitting: number('pitting', defaults.pitting),
+      stochasticFrost:
+          json['stochasticFrost'] as bool? ?? defaults.stochasticFrost,
+    );
+  }
+
+  /// How much of the sea glass finish replaces the regular glass face.
+  ///
+  /// `0` disables the finish entirely, `1` renders full sea glass. Values in
+  /// between cross-fade the face, which is useful for transitions.
+  final double strength;
+
+  /// How far inside the silhouette the glass reaches its full thickness.
+  ///
+  /// Sea glass is a rounded pebble: it is thin at the rim and thickens over
+  /// this distance, so the body color deepens from a pale rim to a saturated
+  /// center. Larger values give a softer, more pebble-like gradient. The
+  /// renderer resolves edge distance up to four times
+  /// [LiquidGlassSettings.effectiveEdgeDistanceRange]; deeper values are
+  /// clamped to that.
+  final double depth;
+
+  /// The share of light the frost scatters instead of letting it through.
+  ///
+  /// Scattered light leaves the glass in its body color, paler at the thin
+  /// rim, so scattering glass glows even over dark content. `0` is clear
+  /// tinted glass; around `0.45` it reads as a milky frosted pebble. The
+  /// glow is brightest over light backdrops.
+  final double scatter;
+
+  /// Brightness of the frosted rim, which scatters more light than the face
+  /// and catches it most on the side facing the light.
+  final double rimGlow;
+
+  /// Strength of the fine sugary grain left by the sea's pitting.
+  final double grain;
+
+  /// Size of one grain in logical pixels.
+  final double grainSize;
+
+  /// Strength of the tiny glints where single pits catch the light.
+  final double sparkle;
+
+  /// How far, in logical pixels, the pits scatter the backdrop seen through
+  /// the glass. This gives frosted glass its slightly broken, textured
+  /// transmission on top of [LiquidGlassSettings.frost]. `0` disables it.
+  final double pitting;
+
+  /// Whether the glass pass renders [LiquidGlassSettings.frost] itself, by
+  /// scattering its backdrop samples the way the pits scatter light,
+  /// instead of running a separate blur pass.
+  ///
+  /// Frosted glass blurs because its rough surface sends each ray a random
+  /// way, so the frost comes out finely grained, as real sea glass looks.
+  /// It skips the blur pass's intermediate textures and render passes, at
+  /// the cost of twelve backdrop samples per glass pixel; it is the lean
+  /// choice for the light frost sea glass uses. Turn it off for a smooth
+  /// Gaussian frost, or for a very heavy frost over a large area.
+  final bool stochasticFrost;
+
+  /// [strength] clamped to `0` to `1`.
+  double get effectiveStrength => strength.clamp(0.0, 1.0);
+
+  /// Whether this finish changes the rendered glass at all.
+  bool get isEnabled => effectiveStrength > 0;
+
+  /// [depth], never below a tenth of a logical pixel.
+  double get effectiveDepth => math.max(0.1, depth);
+
+  /// [scatter] clamped to `0` to `1`.
+  double get effectiveScatter => scatter.clamp(0.0, 1.0);
+
+  /// [rimGlow] clamped to `0` to `1`.
+  double get effectiveRimGlow => rimGlow.clamp(0.0, 1.0);
+
+  /// [grain] clamped to `0` to `1`.
+  double get effectiveGrain => grain.clamp(0.0, 1.0);
+
+  /// [grainSize], never below a quarter of a logical pixel.
+  double get effectiveGrainSize => math.max(0.25, grainSize);
+
+  /// [sparkle] clamped to `0` to `1`.
+  double get effectiveSparkle => sparkle.clamp(0.0, 1.0);
+
+  /// [pitting]; never negative.
+  double get effectivePitting => math.max(0, pitting);
+
+  /// Backdrop reach of the pitting, in logical pixels, that the layer must
+  /// add to its capture; `0` when the finish is disabled.
+  double get samplingReach => isEnabled ? effectivePitting : 0;
+
+  /// Returns a copy with the supplied controls replaced.
+  SeaGlassFinish copyWith({
+    double? strength,
+    double? depth,
+    double? scatter,
+    double? rimGlow,
+    double? grain,
+    double? grainSize,
+    double? sparkle,
+    double? pitting,
+    bool? stochasticFrost,
+  }) => SeaGlassFinish(
+    strength: strength ?? this.strength,
+    depth: depth ?? this.depth,
+    scatter: scatter ?? this.scatter,
+    rimGlow: rimGlow ?? this.rimGlow,
+    grain: grain ?? this.grain,
+    grainSize: grainSize ?? this.grainSize,
+    sparkle: sparkle ?? this.sparkle,
+    pitting: pitting ?? this.pitting,
+    stochasticFrost: stochasticFrost ?? this.stochasticFrost,
+  );
+
+  /// A soft shadow tinted by the glass, as colored glass casts on a light
+  /// surface: light passing through the body colors the shadow.
+  ///
+  /// Pass the result to `LiquidGlass.shadows`. [color] is the body color of
+  /// the shape (see [SeaGlassColors]); [elevation] scales the offset and
+  /// blur in logical pixels. Keep it small for flat UI.
+  static List<BoxShadow> shadows(
+    Color color, {
+    double elevation = 6,
+    Offset direction = const Offset(0.35, 1),
+  }) {
+    if (elevation <= 0) return const [];
+    final hsl = HSLColor.fromColor(color.withValues(alpha: 1));
+    final shade = hsl
+        .withLightness((hsl.lightness * 0.62).clamp(0.0, 1.0))
+        .withSaturation((hsl.saturation * 1.1).clamp(0.0, 1.0))
+        .toColor();
+    return [
+      BoxShadow(
+        color: shade.withValues(alpha: 0.22 * color.a),
+        offset: direction * elevation,
+        blurRadius: elevation * 2.2,
+      ),
+      BoxShadow(
+        color: const Color(0xFF000000).withValues(alpha: 0.05),
+        offset: direction * (elevation * 0.4),
+        blurRadius: elevation,
+      ),
+    ];
+  }
+
+  /// Serializes the finish for presets and tooling.
+  Map<String, Object> toJson() => {
+    'strength': strength,
+    'depth': depth,
+    'scatter': scatter,
+    'rimGlow': rimGlow,
+    'grain': grain,
+    'grainSize': grainSize,
+    'sparkle': sparkle,
+    'pitting': pitting,
+    'stochasticFrost': stochasticFrost,
+  };
+
+  @override
+  List<Object?> get props => [
+    strength,
+    depth,
+    scatter,
+    rimGlow,
+    grain,
+    grainSize,
+    sparkle,
+    pitting,
+    stochasticFrost,
+  ];
+}
+
+/// How a shape's size scales a sea glass [finish]: larger glass behaves like
+/// thicker material, as Apple's does, absorbing more of its body color
+/// (`path`) and scattering light more softly (`scatter`). Mirrors
+/// `seaGlassSizeResponse` in `sea_glass.glsl`.
+@internal
+({double path, double scatter}) seaGlassSizeResponse(
+  SeaGlassFinish finish,
+  double shortSide,
+) {
+  final x = ((shortSide / 2 / finish.effectiveDepth - 1) / 3).clamp(0.0, 1.0);
+  final size = x * x * (3 - 2 * x);
+  return (path: 0.85 + 0.35 * size, scatter: 0.9 + 0.4 * size);
+}
+
+/// Body colors of real sea glass.
+///
+/// Each color is what the glass shows over white at full thickness. Pass one
+/// to [LiquidGlassAppearance.seaGlass]; its alpha is the color density, so
+/// `SeaGlassColors.cobalt.withValues(alpha: .5)` is a paler cobalt.
+abstract final class SeaGlassColors {
+  /// Pale blue-green seafoam, the most common sea glass.
+  static const Color seafoam = Color(0xFF8ED3B6);
+
+  /// Deep bottle green.
+  static const Color kellyGreen = Color(0xFF3E9B5E);
+
+  /// Bright aqua turquoise.
+  static const Color aqua = Color(0xFF2FB8DA);
+
+  /// Soft cornflower blue.
+  static const Color cornflower = Color(0xFFA4C3EC);
+
+  /// Saturated cobalt blue.
+  static const Color cobalt = Color(0xFF2E5AD2);
+
+  /// Pale lavender, from manganese glass sun-tinted over time.
+  static const Color lavender = Color(0xFFD8C7DB);
+
+  /// Yellow-green citron.
+  static const Color citron = Color(0xFFC4D37C);
+
+  /// Honey amber.
+  static const Color amber = Color(0xFFF2AE43);
+
+  /// Bottle brown.
+  static const Color brown = Color(0xFF94502A);
+
+  /// Deep blue-green teal.
+  static const Color teal = Color(0xFF1F7482);
+
+  /// Faintly green white glass.
+  static const Color white = Color(0xFFE9F0EC);
+
+  /// All colors, in the order above.
+  static const List<Color> values = [
+    seafoam,
+    kellyGreen,
+    aqua,
+    cornflower,
+    cobalt,
+    lavender,
+    citron,
+    amber,
+    brown,
+    teal,
+    white,
+  ];
+}

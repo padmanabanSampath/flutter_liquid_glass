@@ -356,7 +356,8 @@ class RenderFakeGlass extends RenderProxyBox {
       appearance.visibility > 0 &&
       (appearance.saturation != 1 ||
           appearance.transmissionGamma != 1 ||
-          appearance.colorModel.faceTransfer(0) != null);
+          appearance.colorModel.faceTransfer(0) != null ||
+          settings.seaGlassFinish.isEnabled);
 
   bool get _hasBackdropEffect => _hasBlur || _hasColorTransfer;
 
@@ -530,8 +531,12 @@ class RenderFakeGlass extends RenderProxyBox {
     final surfaceTint = appearance.colorModel.approximateSurfaceTint(
       appearance.tint,
     );
+    // Under sea glass the backdrop filter applies the tint as the body.
     final tint = surfaceTint.withValues(
-      alpha: surfaceTint.a * visibility,
+      alpha:
+          surfaceTint.a *
+          visibility *
+          (1 - settings.seaGlassFinish.effectiveStrength),
     );
     if (tint.a == 0) return;
     canvas

@@ -21,6 +21,7 @@ CROPS = {
     "blend": ("blend", 50, 350, 370, 570),
     "colors": ("colors", 70, 345, 332, 590),
     "loupe": ("loupe", 0, 170, 402, 470),
+    "sea-glass": ("seaGlass", 0, 226, 402, 706),
 }
 
 

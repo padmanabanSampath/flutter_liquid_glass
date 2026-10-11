@@ -24,6 +24,18 @@ class LiquidStretch extends StatelessWidget {
     super.key,
   });
 
+  /// The give of a sea glass pebble: a solid, heavier body than Apple's
+  /// gel-like glass, so it swells less when pressed, stretches about half as
+  /// far and resists the drag more.
+  const LiquidStretch.seaGlass({
+    required this.child,
+    this.hitTestBehavior = HitTestBehavior.opaque,
+    this.gestureMode = GestureMode.listener,
+    super.key,
+  }) : interactionScale = 1.025,
+       stretch = .22,
+       resistance = .14;
+
   /// The scale factor to apply when the user is interacting with the widget.
   ///
   /// A value of 1.0 means no scaling.

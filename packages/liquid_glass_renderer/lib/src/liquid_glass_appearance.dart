@@ -1,6 +1,8 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter/widgets.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_color_model.dart';
+import 'package:liquid_glass_renderer/src/liquid_glass_settings.dart';
+import 'package:liquid_glass_renderer/src/sea_glass.dart';
 
 /// Lightweight color and materialization controls for one glass shape.
 ///
@@ -117,7 +119,29 @@ class LiquidGlassAppearance with Equatable {
        vibrancy = 0,
        colorModel = const LiquidGlassColorModel.ios27Clear();
 
+  /// A sea glass body of [color].
+  ///
+  /// Under a layer with a [LiquidGlassSettings.seaGlassFinish] the tint is
+  /// the color of the glass itself: it filters the backdrop, deepest where
+  /// the pebble is thickest, instead of washing over it. [color] is what the
+  /// glass shows over white at full thickness and its alpha is the density,
+  /// so `0` is colorless frosted glass. See [SeaGlassColors] for colors
+  /// sampled from real sea glass.
+  ///
+  /// Without a sea glass finish this is plain tinted glass.
+  const LiquidGlassAppearance.seaGlass({
+    Color color = SeaGlassColors.seafoam,
+    this.visibility = 1,
+  }) : tint = color,
+       saturation = 1,
+       transmissionGamma = 1,
+       vibrancy = 0,
+       colorModel = const LiquidGlassColorModel.direct();
+
   /// Material tint; alpha controls how strongly it mixes with the backdrop.
+  ///
+  /// Under a sea glass finish it is the body color instead (see
+  /// [LiquidGlassAppearance.seaGlass]).
   final Color tint;
 
   /// Saturation applied to transmitted backdrop content.

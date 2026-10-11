@@ -1,3 +1,40 @@
+## Unreleased
+
+### Features
+
+- **Sea glass.** A tumbled, frosted, colored glass material.
+  `LiquidGlassSettings.seaGlass()` pairs a shallow lens, light frost and a
+  soft glint with a `SeaGlassFinish` (`LiquidGlassSettings.seaGlassFinish`):
+  the appearance tint becomes the glass body, which filters the backdrop
+  deepest at the pebble's center and pales toward its thin rim, under a
+  scattered glow in the body's color, a frosted rim glow, fine grain,
+  sparkles and pitted transmission. `LiquidGlassAppearance.seaGlass` sets a
+  shape's body color; `SeaGlassColors` holds colors sampled from real sea
+  glass, and `SeaGlassFinish.shadows` a body-tinted shadow. FakeGlass
+  approximates the finish. The default `SeaGlassFinish.none()` renders
+  exactly as before.
+- **Sea glass physics.** The `seaGlass` preset uses a pebble lens
+  (`refractionFitsShape: false`), larger shapes are thicker glass, each
+  shape's frost moves with that shape and cross-fades seamlessly across a
+  blend group's bridge, and `LiquidStretch.seaGlass` gives a stiffer,
+  heavier response.
+- **Clearer sea glass.** The `seaGlass` preset frosts as lightly as iOS
+  27's resting glass (`frost: 2`), and `SeaGlassFinish()` scatters less
+  (`scatter: 0.12`, `pitting: 0.6`), so the backdrop reads through it.
+- **Frost on the shape's surface.** Each shape's frost is evaluated in the
+  shape's own frame, so it turns and stretches with a rotated or scaled
+  shape, not only moves with it.
+- **FakeGlass thickness.** FakeGlass sea glass now deepens toward the
+  center like real glass: the color filter applies the thin rim's face and
+  a multiply-blended thickness pass darkens toward the full-thickness face.
+- **Lean frost.** `SeaGlassFinish.stochasticFrost` (on by default) renders
+  the frost in the glass pass with scattered samples, so sea glass layers
+  need no blur pass.
+- **Light direction.** `LiquidGlassSettings.lightAngle` turns the light that
+  places the glint, border, inner shadow and sea glass rim and sparkles;
+  feed it device tilt for Apple-style motion highlights. `0` renders as
+  before.
+
 ## 1.0.0-dev.1
 
 > Note: This release has breaking changes.

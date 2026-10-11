@@ -84,9 +84,11 @@ void main() {
             (_, Brightness.dark) => Backdrop.night,
             (_, Brightness.light) => Backdrop.photos,
           };
-          if (scene == StageScene.loupe) {
+          if (scene == StageScene.loupe || scene == StageScene.seaGlass) {
             state.material.value = GlassMaterial.preset(
-              style: GlassStyle.loupe,
+              style: scene == StageScene.loupe
+                  ? GlassStyle.loupe
+                  : GlassStyle.seaGlass,
               brightness: brightness,
             );
           }

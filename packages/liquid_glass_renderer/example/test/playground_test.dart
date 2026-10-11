@@ -11,6 +11,7 @@ import 'package:liquid_glass_renderer_example/playground/inspector/material_sect
 import 'package:liquid_glass_renderer_example/playground/playground_state.dart';
 import 'package:liquid_glass_renderer_example/playground/presets.dart';
 import 'package:liquid_glass_renderer_example/playground/scenes/draggable_glass.dart';
+import 'package:liquid_glass_renderer_example/playground/scenes/sea_glass_scene.dart';
 
 void main() {
   group('GlassMaterial', () {
@@ -61,6 +62,22 @@ void main() {
           reason: '$style',
         );
       }
+    });
+
+    test('sea glass ignores the slider and the appearance brightness', () {
+      final seaGlass = GlassMaterial.preset(
+        style: GlassStyle.seaGlass,
+        brightness: Brightness.light,
+      );
+      expect(seaGlass.settings, withTestFrost(LiquidGlassSettings.seaGlass()));
+      expect(seaGlass.appearance, seaGlassAppearance);
+      expect(GlassStyle.seaGlass.followsSlider, isFalse);
+      expect(GlassStyle.seaGlass.followsBrightness, isFalse);
+      expect(seaGlass.withTintAmount(1).settings, seaGlass.settings);
+      expect(
+        seaGlass.withBrightness(Brightness.dark).settings,
+        seaGlass.settings,
+      );
     });
 
     test('the loupe ignores the Liquid Glass slider', () {
@@ -367,6 +384,71 @@ void main() {
     await tester.pump();
     expect(find.text('Clear'), findsWidgets);
     expect(find.byType(LiquidGlassLayer), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the sea glass scene switches to sea glass and toggles tiles', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(1280, 2400)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const PlaygroundApp());
+    await tester.pump();
+    await openSettings(tester);
+    await tester.tap(find.text('Sea Glass').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SeaGlassScene), findsOneWidget);
+    final layer = tester.widget<LiquidGlassLayer>(
+      find.byType(LiquidGlassLayer),
+    );
+    expect(layer.settings.seaGlassFinish.isEnabled, isTrue);
+    expect(find.text('Grain'), findsOneWidget, reason: 'finish controls');
+
+    LiquidGlass tile(String label) => tester.widget<LiquidGlass>(
+      find.ancestor(of: find.text(label), matching: find.byType(LiquidGlass)),
+    );
+    expect(tile('Mobile data').appearance, isNull);
+    expect(
+      tile('Wi-Fi').appearance,
+      const LiquidGlassAppearance.seaGlass(color: SeaGlassColors.teal),
+    );
+
+    await tester.tap(find.text('Mobile data'));
+    await tester.pumpAndSettle();
+    expect(tile('Mobile data').appearance, isNotNull);
+
+    await tester.tap(find.text('Wi-Fi'));
+    await tester.pumpAndSettle();
+    expect(tile('Wi-Fi').appearance, isNull);
+
+    // The accent swatches recolor the switched-on tiles, still within the
+    // one stage layer.
+    await tester.tap(
+      find.byWidgetPredicate(
+        (widget) => widget is Semantics && widget.properties.label == 'Amber',
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tile('Mobile data').appearance,
+      const LiquidGlassAppearance.seaGlass(color: SeaGlassColors.amber),
+    );
+    expect(find.byType(LiquidGlassLayer), findsOneWidget);
+    expect(find.text('Light Angle'), findsOneWidget);
+    expect(find.text('Scattered Frost'), findsOneWidget);
+
+    // Under the sea glass style the color scene merges sea glass pebbles.
+    await tester.tap(find.text('Colors'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cobalt'), findsOneWidget);
+    expect(
+      tile('Cobalt').appearance,
+      const LiquidGlassAppearance.seaGlass(color: SeaGlassColors.cobalt),
+    );
     expect(tester.takeException(), isNull);
   });
 
