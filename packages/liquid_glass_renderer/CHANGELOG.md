@@ -18,6 +18,9 @@
   shape's frost moves with that shape and cross-fades seamlessly across a
   blend group's bridge, and `LiquidStretch.seaGlass` gives a stiffer,
   heavier response.
+- **Clearer sea glass.** The `seaGlass` preset frosts as lightly as iOS
+  27's resting glass (`frost: 2`), and `SeaGlassFinish()` scatters less
+  (`scatter: 0.12`, `pitting: 0.6`), so the backdrop reads through it.
 - **Frost on the shape's surface.** Each shape's frost is evaluated in the
   shape's own frame, so it turns and stretches with a rotated or scaled
   shape, not only moves with it.

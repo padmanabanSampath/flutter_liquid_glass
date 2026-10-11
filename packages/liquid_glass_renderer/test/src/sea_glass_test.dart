@@ -508,7 +508,14 @@ void main() {
         final pixel = await _render(
           tester,
           _scene(
-            _flat(const SeaGlassFinish(grain: 0, sparkle: 0, pitting: 0)),
+            _flat(
+              const SeaGlassFinish(
+                scatter: .25,
+                grain: 0,
+                sparkle: 0,
+                pitting: 0,
+              ),
+            ),
             const LiquidGlassAppearance.seaGlass(color: SeaGlassColors.aqua),
             backdrop: const Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,

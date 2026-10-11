@@ -52,10 +52,10 @@ enum GlassStyle {
   };
 }
 
-/// Frosted white sea glass: a pale, light body so the backdrop stays
+/// Frosted white sea glass: a pale, thin body so the backdrop stays
 /// readable through it.
 const seaGlassAppearance = LiquidGlassAppearance.seaGlass(
-  color: Color(0x8CE9F0EC),
+  color: Color(0x59E9F0EC),
 );
 
 /// The glass of the iOS 27 text loupe: a clear, unfrosted lens with a narrow

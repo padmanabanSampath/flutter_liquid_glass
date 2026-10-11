@@ -33,12 +33,12 @@ class SeaGlassFinish with Equatable {
   const SeaGlassFinish({
     this.strength = 1,
     this.depth = 18,
-    this.scatter = 0.25,
+    this.scatter = 0.12,
     this.rimGlow = 0.35,
     this.grain = 0.5,
     this.grainSize = 1.4,
     this.sparkle = 0.35,
-    this.pitting = 0.9,
+    this.pitting = 0.6,
     this.stochasticFrost = true,
   });
 
@@ -46,12 +46,12 @@ class SeaGlassFinish with Equatable {
   const SeaGlassFinish.none()
     : strength = 0,
       depth = 18,
-      scatter = 0.25,
+      scatter = 0.12,
       rimGlow = 0.35,
       grain = 0.5,
       grainSize = 1.4,
       sparkle = 0.35,
-      pitting = 0.9,
+      pitting = 0.6,
       stochasticFrost = true;
 
   /// A heavily tumbled, milkier pebble: more scatter, coarser grain and a
@@ -71,12 +71,12 @@ class SeaGlassFinish with Equatable {
   const SeaGlassFinish.clear()
     : strength = 1,
       depth = 14,
-      scatter = 0.08,
+      scatter = 0.05,
       rimGlow = 0.25,
       grain = 0.3,
       grainSize = 1.2,
       sparkle = 0.2,
-      pitting = 0.5,
+      pitting = 0.4,
       stochasticFrost = true;
 
   /// Restores a finish produced by [toJson].

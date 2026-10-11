@@ -3,35 +3,57 @@ import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'package:liquid_glass_renderer_example/playground/scenes/draggable_glass.dart';
 import 'package:liquid_glass_renderer_example/playground/sheet_avoidance.dart';
 
-/// A quick settings panel in sea glass: frosted tiles that turn to deep teal
-/// glass when switched on, and a brightness slider.
+/// A quick settings panel in sea glass: frosted tiles that turn to colored
+/// glass when switched on, a brightness slider, and a row of accent colors.
 ///
 /// Every tile is one shape in the stage's layer. Inactive tiles inherit the
-/// layer's appearance; active tiles carry a teal body color, so switching a
-/// tile only changes its appearance and never needs another backdrop
-/// capture.
+/// layer's appearance; active tiles carry the accent as their body color, so
+/// switching a tile only changes its appearance and never needs another
+/// backdrop capture.
 class SeaGlassScene extends StatefulWidget {
   const SeaGlassScene({super.key});
 
-  /// The appearance of switched-on tiles: a teal sea glass body, or teal
-  /// tinted glass when the layer has no sea glass finish.
-  static LiquidGlassAppearance activeAppearance(BuildContext context) =>
-      LiquidGlassSettings.of(context).seaGlassFinish.isEnabled
-      ? const LiquidGlassAppearance.seaGlass(color: SeaGlassColors.teal)
+  /// The accent colors to pick from, teal first. With the twelve shapes of
+  /// the panel, four swatches fill the stage layer's sixteen shapes, so the
+  /// whole scene still samples the backdrop once.
+  static const accents = [
+    ('Teal', SeaGlassColors.teal),
+    ('Aqua', SeaGlassColors.aqua),
+    ('Seafoam', SeaGlassColors.seafoam),
+    ('Amber', SeaGlassColors.amber),
+  ];
+
+  /// The appearance of switched-on tiles: a sea glass body of [color], or
+  /// glass tinted [color] when the layer has no sea glass finish.
+  static LiquidGlassAppearance activeAppearance(
+    BuildContext context, [
+    Color color = SeaGlassColors.teal,
+  ]) => LiquidGlassSettings.of(context).seaGlassFinish.isEnabled
+      ? LiquidGlassAppearance.seaGlass(color: color)
       : LiquidGlassAppearance.ios27Regular(
           brightness: CupertinoTheme.brightnessOf(context),
-          tint: SeaGlassColors.teal,
+          tint: color,
         );
 
   @override
   State<SeaGlassScene> createState() => _SeaGlassSceneState();
 }
 
-/// Ink on frosted tiles, which follows the appearance, and on teal tiles.
-Color _ink(BuildContext context, {bool active = false}) =>
-    active || CupertinoTheme.brightnessOf(context) == Brightness.dark
-    ? const Color(0xFFFFFFFF)
-    : const Color(0xFF173A40);
+/// Ink on frosted tiles, which follows the appearance, and on tiles in
+/// [accent]: white on deep colors, dark on light ones.
+Color _ink(BuildContext context, {Color? accent}) {
+  final light = accent != null
+      ? accent.computeLuminance() > 0.35
+      : CupertinoTheme.brightnessOf(context) == Brightness.light;
+  return light ? const Color(0xFF173A40) : const Color(0xFFFFFFFF);
+}
+
+/// Squash and stretch for a tile: Apple's gel-like give for liquid glass,
+/// a solid pebble's for sea glass.
+Widget _stretch(BuildContext context, Widget child) =>
+    LiquidGlassSettings.of(context).seaGlassFinish.isEnabled
+    ? LiquidStretch.seaGlass(child: child)
+    : LiquidStretch(child: child);
 
 const _tileHeight = 64.0;
 const _gap = 12.0;
@@ -39,6 +61,7 @@ const _gap = 12.0;
 class _SeaGlassSceneState extends State<SeaGlassScene> {
   final _active = <String>{'Wi-Fi', 'Location'};
   var _brightness = 0.55;
+  var _accent = SeaGlassColors.teal;
 
   void _toggle(String label) => setState(() {
     if (!_active.remove(label)) _active.add(label);
@@ -48,7 +71,7 @@ class _SeaGlassSceneState extends State<SeaGlassScene> {
     icon: icon,
     label: label,
     detail: detail,
-    active: _active.contains(label),
+    accent: _active.contains(label) ? _accent : null,
     onTap: () => _toggle(label),
   );
 
@@ -56,7 +79,7 @@ class _SeaGlassSceneState extends State<SeaGlassScene> {
     icon: icon,
     label: label,
     compact: true,
-    active: _active.contains(label),
+    accent: _active.contains(label) ? _accent : null,
     onTap: () => _toggle(label),
   );
 
@@ -73,6 +96,7 @@ class _SeaGlassSceneState extends State<SeaGlassScene> {
               children: [
                 _BrightnessSlider(
                   value: _brightness,
+                  accent: _accent,
                   onChanged: (value) => setState(() => _brightness = value),
                 ),
                 const SizedBox(height: _gap * 2),
@@ -101,6 +125,11 @@ class _SeaGlassSceneState extends State<SeaGlassScene> {
                   ], bottom: 0),
                   _wide(CupertinoIcons.share, 'Quick Share'),
                 ], bottom: 0),
+                const SizedBox(height: _gap * 2),
+                _AccentPicker(
+                  selected: _accent,
+                  onSelected: (color) => setState(() => _accent = color),
+                ),
               ],
             ),
           ),
@@ -126,8 +155,8 @@ class _Tile extends StatelessWidget {
   const _Tile({
     required this.icon,
     required this.label,
-    required this.active,
     required this.onTap,
+    this.accent,
     this.detail,
     this.compact = false,
   });
@@ -135,25 +164,32 @@ class _Tile extends StatelessWidget {
   final IconData icon;
   final String label;
   final String? detail;
-  final bool active;
+
+  /// The body color while switched on; `null` while off.
+  final Color? accent;
   final bool compact;
   final VoidCallback onTap;
 
+  bool get active => accent != null;
+
   @override
   Widget build(BuildContext context) {
-    final ink = _ink(context, active: active);
+    final ink = _ink(context, accent: accent);
     return Semantics(
       button: true,
       toggled: active,
       label: compact ? label : null,
       child: GestureDetector(
         onTap: onTap,
-        child: LiquidStretch.seaGlass(
-          child: LiquidGlass(
+        child: _stretch(
+          context,
+          LiquidGlass(
             shape: const LiquidRoundedSuperellipse(
               borderRadius: _tileHeight / 2,
             ),
-            appearance: active ? SeaGlassScene.activeAppearance(context) : null,
+            appearance: accent == null
+                ? null
+                : SeaGlassScene.activeAppearance(context, accent!),
             child: _FrostedGlow(
               child: SizedBox(
                 height: _tileHeight,
@@ -225,9 +261,14 @@ class _FrostedGlow extends StatelessWidget {
 /// A brightness slider: a teal glass bar for the level and a frosted bar
 /// for the rest, split by a thin handle.
 class _BrightnessSlider extends StatelessWidget {
-  const _BrightnessSlider({required this.value, required this.onChanged});
+  const _BrightnessSlider({
+    required this.value,
+    required this.accent,
+    required this.onChanged,
+  });
 
   final double value;
+  final Color accent;
   final ValueChanged<double> onChanged;
 
   static const _height = 56.0;
@@ -262,7 +303,10 @@ class _BrightnessSlider extends StatelessWidget {
                       shape: const LiquidRoundedSuperellipse(
                         borderRadius: _height / 2,
                       ),
-                      appearance: SeaGlassScene.activeAppearance(context),
+                      appearance: SeaGlassScene.activeAppearance(
+                        context,
+                        accent,
+                      ),
                       child: const SizedBox.expand(),
                     ),
                   ),
@@ -271,10 +315,12 @@ class _BrightnessSlider extends StatelessWidget {
                     top: 6,
                     bottom: 6,
                     width: 4,
-                    child: const DecoratedBox(
+                    child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: SeaGlassColors.teal,
-                        borderRadius: BorderRadius.all(Radius.circular(2)),
+                        color: accent,
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(2),
+                        ),
                       ),
                     ),
                   ),
@@ -306,6 +352,54 @@ class _BrightnessSlider extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Small glass pebbles to pick the accent the switched-on tiles are made of.
+class _AccentPicker extends StatelessWidget {
+  const _AccentPicker({required this.selected, required this.onSelected});
+
+  final Color selected;
+  final ValueChanged<Color> onSelected;
+
+  static const _size = 40.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (final (name, color) in SeaGlassScene.accents)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Semantics(
+              button: true,
+              selected: color == selected,
+              label: name,
+              child: GestureDetector(
+                onTap: () => onSelected(color),
+                child: _stretch(
+                  context,
+                  LiquidGlass(
+                    shape: const LiquidOval(),
+                    appearance: SeaGlassScene.activeAppearance(context, color),
+                    child: SizedBox.square(
+                      dimension: _size,
+                      child: color == selected
+                          ? Icon(
+                              CupertinoIcons.checkmark_alt,
+                              size: 20,
+                              color: _ink(context, accent: color),
+                            )
+                          : null,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

@@ -79,7 +79,7 @@ class LiquidGlassSettings with Equatable {
   /// Give each shape its body color with [LiquidGlassAppearance.seaGlass].
   factory LiquidGlassSettings.seaGlass({
     SeaGlassFinish finish = const SeaGlassFinish(),
-    double frost = 5,
+    double frost = 2,
     double refractionHeight = 36,
     double refractionAmount = 16,
     double highlight = 0.3,

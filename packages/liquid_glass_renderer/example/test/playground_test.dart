@@ -424,6 +424,20 @@ void main() {
     await tester.tap(find.text('Wi-Fi'));
     await tester.pumpAndSettle();
     expect(tile('Wi-Fi').appearance, isNull);
+
+    // The accent swatches recolor the switched-on tiles, still within the
+    // one stage layer.
+    await tester.tap(
+      find.byWidgetPredicate(
+        (widget) => widget is Semantics && widget.properties.label == 'Amber',
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tile('Mobile data').appearance,
+      const LiquidGlassAppearance.seaGlass(color: SeaGlassColors.amber),
+    );
+    expect(find.byType(LiquidGlassLayer), findsOneWidget);
     expect(find.text('Light Angle'), findsOneWidget);
     expect(find.text('Scattered Frost'), findsOneWidget);
 
