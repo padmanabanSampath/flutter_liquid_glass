@@ -261,12 +261,46 @@ void main() {
     });
   });
 
-  test('sea glass stretch is stiffer than the default', () {
+  test('sea glass stretch is heavier than the default', () {
     const glass = LiquidStretch(child: SizedBox());
     const pebble = LiquidStretch.seaGlass(child: SizedBox());
     expect(pebble.stretch, lessThan(glass.stretch));
     expect(pebble.interactionScale, lessThan(glass.interactionScale));
     expect(pebble.resistance, greaterThan(glass.resistance));
+    expect(pebble.wobble, isTrue);
+    expect(glass.wobble, isFalse);
+  });
+
+  testWidgets('a sea glass drop wobbles back when let go', (tester) async {
+    const key = Key('drop');
+    Future<(double, double)> pressAndRelease(Widget stretch) async {
+      await tester.pumpWidget(Center(child: stretch));
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(key)),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      final pressed = tester.getRect(find.byKey(key)).width;
+      await gesture.up();
+      var smallest = double.infinity;
+      for (var frame = 0; frame < 60; frame++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        smallest = math.min(smallest, tester.getRect(find.byKey(key)).width);
+      }
+      return (pressed, smallest);
+    }
+
+    const child = SizedBox.square(key: key, dimension: 100);
+    final (glassPressed, glassSmallest) = await pressAndRelease(
+      const LiquidStretch(child: child),
+    );
+    final (dropPressed, dropSmallest) = await pressAndRelease(
+      const LiquidStretch.seaGlass(child: child),
+    );
+    expect(glassPressed, greaterThan(100));
+    expect(dropPressed, greaterThan(100));
+    // Apple's glass eases back to its size; the drop overshoots below it.
+    expect(glassSmallest, moreOrLessEquals(100, epsilon: .01));
+    expect(dropSmallest, lessThan(99.7));
   });
 
   test('sea glass appearance carries the body color as its tint', () {

@@ -10,18 +10,29 @@ import 'package:liquid_glass_renderer_example/playground/sheet_avoidance.dart';
 /// layer's appearance; active tiles carry the accent as their body color, so
 /// switching a tile only changes its appearance and never needs another
 /// backdrop capture.
+///
+/// The tiles, and the accent pebbles, are blend groups: at rest they keep
+/// apart, but a tile pulled toward its neighbor flows into it like a water
+/// drop and pinches off again when let go.
 class SeaGlassScene extends StatefulWidget {
   const SeaGlassScene({super.key});
 
   /// The accent colors to pick from, teal first. With the twelve shapes of
-  /// the panel, four swatches fill the stage layer's sixteen shapes, so the
-  /// whole scene still samples the backdrop once.
+  /// the panel and the stage's settings button, three swatches fill the
+  /// stage layer's sixteen shapes, so the whole scene still samples the
+  /// backdrop once.
   static const accents = [
     ('Teal', SeaGlassColors.teal),
     ('Aqua', SeaGlassColors.aqua),
-    ('Seafoam', SeaGlassColors.seafoam),
     ('Amber', SeaGlassColors.amber),
   ];
+
+  /// Blend radius of the tiles: below their gap, so they keep apart at rest
+  /// and bridge once a tile is pulled half the gap toward a neighbor.
+  static const tileBlend = 16.0;
+
+  /// Blend radius of the accent pebbles, which sit further apart.
+  static const accentBlend = 22.0;
 
   /// The appearance of switched-on tiles: a sea glass body of [color], or
   /// glass tinted [color] when the layer has no sea glass finish.
@@ -49,7 +60,7 @@ Color _ink(BuildContext context, {Color? accent}) {
 }
 
 /// Squash and stretch for a tile: Apple's gel-like give for liquid glass,
-/// a solid pebble's for sea glass.
+/// a heavier, wobbling drop for sea glass.
 Widget _stretch(BuildContext context, Widget child) =>
     LiquidGlassSettings.of(context).seaGlassFinish.isEnabled
     ? LiquidStretch.seaGlass(child: child)
@@ -100,31 +111,45 @@ class _SeaGlassSceneState extends State<SeaGlassScene> {
                   onChanged: (value) => setState(() => _brightness = value),
                 ),
                 const SizedBox(height: _gap * 2),
-                _row([
-                  _wide(CupertinoIcons.wifi, 'Wi-Fi', 'Home 5G'),
-                  _wide(
-                    CupertinoIcons.antenna_radiowaves_left_right,
-                    'Mobile data',
+                LiquidGlassBlendGroup(
+                  blend: SeaGlassScene.tileBlend,
+                  child: Column(
+                    children: [
+                      _row([
+                        _wide(CupertinoIcons.wifi, 'Wi-Fi', 'Home 5G'),
+                        _wide(
+                          CupertinoIcons.antenna_radiowaves_left_right,
+                          'Mobile data',
+                        ),
+                      ]),
+                      _row([
+                        _wide(CupertinoIcons.bluetooth, 'Bluetooth'),
+                        _row([
+                          _small(CupertinoIcons.lightbulb, 'Torch'),
+                          _small(CupertinoIcons.location_fill, 'Location'),
+                        ], bottom: 0),
+                      ]),
+                      _row([
+                        _wide(CupertinoIcons.moon, 'Modes'),
+                        _wide(
+                          CupertinoIcons.recordingtape,
+                          'Screen record',
+                          'Start',
+                        ),
+                      ]),
+                      _row([
+                        _row([
+                          _small(CupertinoIcons.airplane, 'Airplane mode'),
+                          _small(
+                            CupertinoIcons.qrcode_viewfinder,
+                            'Scan QR code',
+                          ),
+                        ], bottom: 0),
+                        _wide(CupertinoIcons.share, 'Quick Share'),
+                      ], bottom: 0),
+                    ],
                   ),
-                ]),
-                _row([
-                  _wide(CupertinoIcons.bluetooth, 'Bluetooth'),
-                  _row([
-                    _small(CupertinoIcons.lightbulb, 'Torch'),
-                    _small(CupertinoIcons.location_fill, 'Location'),
-                  ], bottom: 0),
-                ]),
-                _row([
-                  _wide(CupertinoIcons.moon, 'Modes'),
-                  _wide(CupertinoIcons.recordingtape, 'Screen record', 'Start'),
-                ]),
-                _row([
-                  _row([
-                    _small(CupertinoIcons.airplane, 'Airplane mode'),
-                    _small(CupertinoIcons.qrcode_viewfinder, 'Scan QR code'),
-                  ], bottom: 0),
-                  _wide(CupertinoIcons.share, 'Quick Share'),
-                ], bottom: 0),
+                ),
                 const SizedBox(height: _gap * 2),
                 _AccentPicker(
                   selected: _accent,
@@ -183,7 +208,7 @@ class _Tile extends StatelessWidget {
         onTap: onTap,
         child: _stretch(
           context,
-          LiquidGlass(
+          LiquidGlass.grouped(
             shape: const LiquidRoundedSuperellipse(
               borderRadius: _tileHeight / 2,
             ),
@@ -357,6 +382,7 @@ class _BrightnessSlider extends StatelessWidget {
 }
 
 /// Small glass pebbles to pick the accent the switched-on tiles are made of.
+/// Pulled toward each other, they merge, their colors flowing together.
 class _AccentPicker extends StatelessWidget {
   const _AccentPicker({required this.selected, required this.onSelected});
 
@@ -367,39 +393,45 @@ class _AccentPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        for (final (name, color) in SeaGlassScene.accents)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Semantics(
-              button: true,
-              selected: color == selected,
-              label: name,
-              child: GestureDetector(
-                onTap: () => onSelected(color),
-                child: _stretch(
-                  context,
-                  LiquidGlass(
-                    shape: const LiquidOval(),
-                    appearance: SeaGlassScene.activeAppearance(context, color),
-                    child: SizedBox.square(
-                      dimension: _size,
-                      child: color == selected
-                          ? Icon(
-                              CupertinoIcons.checkmark_alt,
-                              size: 20,
-                              color: _ink(context, accent: color),
-                            )
-                          : null,
+    return LiquidGlassBlendGroup(
+      blend: SeaGlassScene.accentBlend,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (final (name, color) in SeaGlassScene.accents)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Semantics(
+                button: true,
+                selected: color == selected,
+                label: name,
+                child: GestureDetector(
+                  onTap: () => onSelected(color),
+                  child: _stretch(
+                    context,
+                    LiquidGlass.grouped(
+                      shape: const LiquidOval(),
+                      appearance: SeaGlassScene.activeAppearance(
+                        context,
+                        color,
+                      ),
+                      child: SizedBox.square(
+                        dimension: _size,
+                        child: color == selected
+                            ? Icon(
+                                CupertinoIcons.checkmark_alt,
+                                size: 20,
+                                color: _ink(context, accent: color),
+                              )
+                            : null,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -405,6 +405,16 @@ void main() {
     final layer = tester.widget<LiquidGlassLayer>(
       find.byType(LiquidGlassLayer),
     );
+    // Tiles and accent pebbles merge in their own blend groups, and the
+    // scene with the settings button fills the layer's sixteen shapes.
+    expect(find.byType(LiquidGlassBlendGroup), findsNWidgets(2));
+    expect(
+      find.descendant(
+        of: find.byType(LiquidGlassLayer),
+        matching: find.byType(LiquidGlass),
+      ),
+      findsNWidgets(LiquidGlassBlendGroup.maxShapesPerLayer),
+    );
     expect(layer.settings.seaGlassFinish.isEnabled, isTrue);
     expect(find.text('Grain'), findsOneWidget, reason: 'finish controls');
 

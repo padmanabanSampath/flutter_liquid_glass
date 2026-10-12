@@ -43,6 +43,12 @@ class FlutterGpuGeometryRenderer {
   static int debugPostFrameFlushCount = 0;
   int get debugRetiredTextureCount => 0;
   int get debugMatteTextureCount => 0;
+  ui.Image? get debugMatteImage => null;
+
+  /// Incremental matte updates; there are no mattes on the web.
+  static bool incrementalMatteUpdates = true;
+  int debugIncrementalRenderCount = 0;
+  int debugLastRedrawnPixels = 0;
   Object? get debugMatteTexture => null;
   (int, int)? get debugMatteTextureSize => null;
 

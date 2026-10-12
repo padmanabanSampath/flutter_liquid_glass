@@ -1582,6 +1582,19 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
     return (axisX: axisX, axisY: axisY, determinant: determinant);
   }
 
+  static bool _debugWarnedShapeLimit = false;
+
+  /// Warns once that a layer had more shapes than it can draw.
+  static void _debugWarnShapeLimit(int dropped) {
+    if (!kDebugMode || _debugWarnedShapeLimit) return;
+    _debugWarnedShapeLimit = true;
+    debugPrint(
+      'liquid_glass_renderer: a LiquidGlassLayer holds at most '
+      '${LiquidGlassBlendGroup.maxShapesPerLayer} shapes; $dropped more are '
+      'not drawn. Split the glass across layers.',
+    );
+  }
+
   _GpuGeometryFrame _buildGpuGeometryImage(
     List<(RenderLiquidGlassGeometry, GeometryCache, Matrix4)> geometries,
     Rect bounds,
@@ -1627,10 +1640,15 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
       var numShapes = 0;
       var shortSide = double.infinity;
 
+      var dropped = 0;
       for (final (_, geometry, geometryToLayer) in geometries) {
         var firstInGroup = true;
         for (final shape in geometry.shapes) {
-          if (numShapes >= 16) break; // MAX_SHAPES limit
+          if (numShapes >= 16) {
+            // MAX_SHAPES limit.
+            dropped++;
+            continue;
+          }
 
           final shapeToGeometry = shape.shapeToGeometry ?? _identity;
           final basis = _matteShapeBasis(geometryToLayer, shapeToGeometry);
@@ -1745,6 +1763,7 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
       if (numShapes == 0) {
         throw StateError('No invertible liquid-glass shapes to render.');
       }
+      if (dropped > 0) _debugWarnShapeLimit(dropped);
       if (shortSide != _materialShortSide) {
         _materialShortSide = shortSide;
         _updateShaderSettings();
