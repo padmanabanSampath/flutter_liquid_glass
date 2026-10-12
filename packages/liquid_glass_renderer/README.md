@@ -182,8 +182,15 @@ LiquidGlassLayer(
 )
 ```
 
-A layer renders at most 16 shapes. Plain `LiquidGlass` shapes in the same layer
-don't blend.
+A layer renders at most 16 shapes; in debug builds it warns when it has to
+leave some out. Plain `LiquidGlass` shapes in the same layer don't blend.
+`FakeGlass` blends a group too (see [FakeGlass](#fakeglass)).
+
+Each shape joins only the members within two blend radii of the nearest one,
+so the union doesn't depend on shapes far away. When a shape moves, the
+layer copies its last geometry and redraws only around that shape: dragging
+one tile of a 16-shape panel redraws about a fifth of the geometry. The result
+is the same as redrawing all of it.
 
 ## iOS 27 presets and the Liquid Glass slider
 
@@ -370,9 +377,11 @@ differ:
   shape's frost lies on that shape's own surface: it moves, turns and
   stretches with the shape, and cross-fades without a seam across a
   bridge.
-- **Interaction.** `LiquidStretch.seaGlass` gives a solid pebble's give:
-  less swell when pressed, about half the stretch and more resistance than
-  Apple's gel-like glass.
+- **Interaction.** `LiquidStretch.seaGlass` behaves like a heavier drop than
+  Apple's gel-like glass. It swells a little less when pressed and resists
+  the drag more, but still stretches far enough to flow into a neighbor in a
+  blend group, and it wobbles back when let go (`wobble`). In the example's
+  quick settings, tiles pulled toward each other bridge and pinch off again.
 
 ### Light direction
 
@@ -519,8 +528,15 @@ the web, no Flutter GPU). Set `fake: true` on a layer to use it on purpose, or
 to test that path.
 
 It keeps frost, tint, the color model, the glint, the border, the inner
-shadow, visibility and exterior shadows. It leaves out refraction,
-`backdropShrink`, `dispersion` and vibrancy.
+shadow, visibility, exterior shadows and blend groups. It leaves out
+refraction, `backdropShrink`, `dispersion` and vibrancy.
+
+A blend group joins the way full glass does. Each member's surface draws the
+group's smooth union where that member is the nearest, with up to three
+neighbors, and the bridges between members get their own clipped backdrop
+filter. All of them share the layer's one backdrop copy. Across a bridge the
+tint blends from one member to the next, but the backdrop's color transfer
+switches halfway.
 
 `FakeGlass` is not a cheaper mode: it pays for the same backdrop readback and
 blur as full glass (see below).
@@ -590,9 +606,9 @@ Best practices:
   debug builds the package logs a warning when a frame makes more than one
   independent copy.
 - **Keep layers small.** A layer's cost grows with the area its glass covers.
-- **Don't animate blend-group geometry every frame.** Moving one shape in a
-  group re-renders the whole group's geometry, which can miss 120 Hz. Static
-  geometry is cached.
+- **Keep moving glass small.** Moving a shape redraws the geometry around
+  it, out to three blend radii for a grouped shape. Static geometry is
+  cached.
 - **Keep shadows few and small.**
 - **Mind the blur.** Impeller stops downsampling at σ ≤ 4, which makes small
   blurs cost more than σ7; σ20 costs about three times σ7.

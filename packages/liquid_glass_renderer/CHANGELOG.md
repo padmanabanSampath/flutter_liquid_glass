@@ -16,8 +16,8 @@
 - **Sea glass physics.** The `seaGlass` preset uses a pebble lens
   (`refractionFitsShape: false`), larger shapes are thicker glass, each
   shape's frost moves with that shape and cross-fades seamlessly across a
-  blend group's bridge, and `LiquidStretch.seaGlass` gives a stiffer,
-  heavier response.
+  blend group's bridge, and `LiquidStretch.seaGlass` gives a heavier
+  response than Apple's glass.
 - **Clearer sea glass.** The `seaGlass` preset frosts as lightly as iOS
   27's resting glass (`frost: 2`), and `SeaGlassFinish()` scatters less
   (`scatter: 0.12`, `pitting: 0.6`), so the backdrop reads through it.
@@ -34,6 +34,31 @@
   places the glint, border, inner shadow and sea glass rim and sparkles;
   feed it device tilt for Apple-style motion highlights. `0` renders as
   before.
+- **FakeGlass blend groups.** `FakeGlass` now joins the shapes of a
+  `LiquidGlassBlendGroup` the way full glass does. Each member's surface
+  draws the group's smooth union where it is the nearest member, and the
+  bridges get their own clipped backdrop filter from the layer's shared copy.
+- **Droplet merging.** `LiquidStretch.seaGlass` stretches far enough to flow
+  into a neighbor in a blend group and wobbles back when let go (the new
+  `LiquidStretch.wobble`). In the example, the sea glass quick settings
+  tiles and accent pebbles merge and pinch off like drops.
+
+### Performance
+
+- **Redraw only what moved.** When a shape moves, the geometry renderer
+  copies the previous matte and redraws only the region that shape can
+  affect. The output is byte-identical to a full redraw; in the sea glass
+  quick settings, a drag redraws about a fifth of the matte.
+- **Local blend groups.** A group's union combines only the members within
+  two blend radii of a pixel's nearest member, fading them out before that.
+  Each pixel starts from its nearest box, and groups that can't win are
+  skipped. Standalone shapes and two-member groups render exactly as before.
+  Groups of three or more can differ slightly where several members meet.
+
+### Fixes
+
+- A layer that has to drop shapes past its 16-shape limit now warns once in
+  debug builds instead of dropping them silently.
 
 ## 1.0.0-dev.1
 

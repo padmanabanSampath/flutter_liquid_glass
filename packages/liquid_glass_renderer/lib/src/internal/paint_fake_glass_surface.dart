@@ -5,8 +5,10 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_shaders/flutter_shaders.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+import 'package:liquid_glass_renderer/src/internal/fake_glass_blend.dart';
 import 'package:liquid_glass_renderer/src/internal/rounded_superellipse_parameters.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_settings.dart';
+import 'package:meta/meta.dart';
 
 /// Extra logical pixels required for the portion of the contour that lies
 /// outside the shape's nominal bounds.
@@ -87,8 +89,44 @@ Rect fakeGlassSurfaceQuad(Rect localQuad, Float64List transform) {
   );
 }
 
+/// The surface tint FakeGlass washes over [appearance]'s face.
+Color _surfaceTint(
+  LiquidGlassAppearance appearance,
+  LiquidGlassSettings settings,
+) {
+  final surfaceTint = appearance.colorModel.approximateSurfaceTint(
+    appearance.tint,
+  );
+  // Under sea glass the tint is the body, which the backdrop filter applies,
+  // so the wash fades out with the finish's strength.
+  return surfaceTint.withValues(
+    alpha:
+        surfaceTint.a *
+        appearance.visibility.clamp(0.0, 1.0) *
+        (1 - settings.seaGlassFinish.effectiveStrength),
+  );
+}
+
+/// The members of a blend group one FakeGlass surface draws the union of.
+@internal
+typedef FakeGlassSurfaceGroup = ({
+  /// Blend radius in layer pixels.
+  double blend,
+
+  /// The member this surface belongs to.
+  FakeGlassBlendMember self,
+
+  /// [self] and its nearest neighbors, in widget order (see
+  /// fakeGlassNeighbors).
+  List<FakeGlassBlendMember> members,
+});
+
 /// Paints one analytic FakeGlass surface with the same logical-pixel setting
 /// contract used by RealGlass.
+///
+/// With a [group], the surface draws the group's smooth union where its
+/// shape is the nearest member, so bridges to its neighbors appear and the
+/// merged glass is drawn once.
 void paintFakeGlassSurface(
   Canvas canvas, {
   required ui.FragmentShader shader,
@@ -98,18 +136,11 @@ void paintFakeGlassSurface(
   required LiquidGlassAppearance appearance,
   required double devicePixelRatio,
   bool exteriorOnly = false,
+  FakeGlassSurfaceGroup? group,
 }) {
   final appearanceVisibility = appearance.visibility.clamp(0.0, 1.0);
   final seaGlass = settings.seaGlassFinish;
-  final surfaceTint = appearance.colorModel.approximateSurfaceTint(
-    appearance.tint,
-  );
-  // Under sea glass the tint is the body, which the backdrop filter applies,
-  // so the wash fades out with the finish's strength.
-  final tint = surfaceTint.withValues(
-    alpha:
-        surfaceTint.a * appearanceVisibility * (1 - seaGlass.effectiveStrength),
-  );
+  final tint = _surfaceTint(appearance, settings);
   final faceEmission =
       appearance.colorModel
           .faceTransfer(
@@ -188,11 +219,17 @@ void paintFakeGlassSurface(
             appearance.tint.g,
             appearance.tint.b,
             appearance.tint.a,
-          ]);
+          ])
+          ..setFloats(_groupUniforms(group, settings));
       });
   final contourOutset = fakeGlassSurfaceOutset(settings);
+  // A member also draws its half of the bridges, which reach up to half the
+  // blend radius beyond its box, in its own (possibly scaled) frame.
+  final bridgeOutset = group == null
+      ? 0.0
+      : group.blend / math.max(group.self.distanceScale, 1e-3);
   final quad = fakeGlassSurfaceQuad(
-    (Offset.zero & size).inflate(contourOutset),
+    (Offset.zero & size).inflate(contourOutset + bridgeOutset),
     canvas.getTransform(),
   );
   if (seaGlass.isEnabled && !exteriorOnly && appearanceVisibility > 0) {
@@ -208,4 +245,59 @@ void paintFakeGlassSurface(
   }
   writeUniforms(thicknessPass: false);
   canvas.drawRect(quad, Paint()..shader = shader);
+}
+
+/// The blend group uniforms of fake_glass_surface.frag: uGroup, then four
+/// slots each of uMemberFrame, uMemberPlace, uMemberShape, uMemberRse (three
+/// per slot), uMemberTint and uMemberBody. Zero without a group.
+List<double> _groupUniforms(
+  FakeGlassSurfaceGroup? group,
+  LiquidGlassSettings settings,
+) {
+  const slots = fakeGlassGroupMembers;
+  if (group == null || group.members.length < 2) {
+    return List<double>.filled(4 + slots * (4 + 4 + 4 + 12 + 4 + 4), 0);
+  }
+  final members = group.members.take(slots).toList();
+  final self = group.self;
+  final frames = [for (final member in members) self.frameTo(member)];
+  // Every slot of one uniform array, unused slots zero.
+  List<double> each(List<double> Function(int slot) values, int width) => [
+    for (var slot = 0; slot < slots; slot++)
+      ...(slot < members.length ? values(slot) : List<double>.filled(width, 0)),
+  ];
+  return [
+    group.blend,
+    members.length.toDouble(),
+    members.indexOf(self).toDouble(),
+    self.distanceScale,
+    ...each((slot) => frames[slot].sublist(0, 4), 4),
+    ...each(
+      (slot) => [
+        frames[slot][4],
+        frames[slot][5],
+        members[slot].distanceScale,
+        0,
+      ],
+      4,
+    ),
+    ...each(
+      (slot) => [
+        members[slot].type,
+        members[slot].size.width / 2,
+        members[slot].size.height / 2,
+        members[slot].radius,
+      ],
+      4,
+    ),
+    ...each((slot) => members[slot].superellipse, 12),
+    ...each((slot) {
+      final tint = _surfaceTint(members[slot].appearance, settings);
+      return [tint.r, tint.g, tint.b, tint.a];
+    }, 4),
+    ...each((slot) {
+      final body = members[slot].appearance.tint;
+      return [body.r, body.g, body.b, body.a];
+    }, 4),
+  ];
 }

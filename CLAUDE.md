@@ -89,7 +89,7 @@ The liquid glass effect works by capturing and distorting background pixels thro
    - `gpu/geometry_fragment.glsl` (Flutter GPU): renders every shape of a layer into the matte
    - `gpu/material_gradient_fragment.glsl` (Flutter GPU): low-resolution per-shape appearance map
    - `liquid_glass_final_render{,_material,_tint}.frag`: the backdrop pass (refraction, frost, lighting, color, sea glass)
-   - `fake_glass_surface.frag`, `fake_glass_backdrop_edge.frag`: FakeGlass
+   - `fake_glass_surface.frag`, `fake_glass_backdrop_edge.frag`: FakeGlass. Blend groups: each member's surface draws the group's union where it is the nearest member; the CPU side (`lib/src/internal/fake_glass_blend.dart`) finds neighbors and traces the bridges' backdrop clip
 
 ### Key Components
 
@@ -108,7 +108,8 @@ The package caches geometry in textures to minimize GPU work. `gpu.Texture` cann
 - Minimize LiquidGlassLayer and LiquidGlassBlendGroup pixel coverage
 - Limit number of blended shapes (each adds computational load)
 - Cache static geometry - re-rendering on every frame is expensive
-- Moving any shape in a LiquidGlassBlendGroup forces all shapes to re-render
+- Moving a shape redraws only the matte around it: the renderer copies the previous matte into the next ring texture and redraws the shape's reach (contour plus three blend radii; see `_planMatteUpdate` and `sceneSample` in `gpu/sdf.glsl`). Keep the group union local: a pixel may depend only on members within two blend radii of its nearest member, or incremental updates stop being exact (`test/src/incremental_matte_test.dart` compares them with full renders)
+- Flutter GPU bindings outlive a draw; call `clearBindings()` before binding a different pipeline in the same pass (the Vulkan backend crashes otherwise)
 
 ## Code Generation
 
