@@ -320,7 +320,10 @@ class LiquidBlob extends LiquidShape {
         values.addAll([
           drawn[i].count.toDouble(),
           drawn[i].amplitude,
-          drawn[i].phase,
+          // Whole wave counts repeat every turn of the phase. Wrapping keeps
+          // a living blob's phase small, which the half-precision FakeGlass
+          // shader would otherwise lose after minutes.
+          drawn[i].phase % (2 * math.pi),
         ]);
         norm += drawn[i].amplitude.abs();
       } else {

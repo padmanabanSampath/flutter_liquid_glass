@@ -93,23 +93,34 @@ float sdRoundedSuperellipse(
 // documented): (count1, amplitude1, phase1, count2), (amplitude2, phase2,
 // count3, amplitude3), (phase3, norm, -, -). Returns the radius at angle
 // theta and its derivative.
-vec2 fakeBlobRadius(float theta, vec2 h, vec4 waves0, vec4 waves1, vec4 waves2) {
-    float c = cos(theta);
-    float s = sin(theta);
-    vec2 axes = max(h, vec2(1e-4));
-    float a = axes.x;
-    float b = axes.y;
-    float ellipse = a * b * inversesqrt(max(b * b * c * c + a * a * s * s, 1e-12));
-    float ellipseSlope = -ellipse * ellipse * ellipse * (a * a - b * b) * s * c /
+//
+// Explicitly highp: FakeGlass is mediump, where a^2 b^2 and ellipse^3
+// overflow half precision (65504) once a half axis passes about 16 px.
+highp vec2 fakeBlobRadius(
+    highp float theta,
+    highp vec2 h,
+    highp vec4 waves0,
+    highp vec4 waves1,
+    highp vec4 waves2
+) {
+    highp float c = cos(theta);
+    highp float s = sin(theta);
+    highp vec2 axes = max(h, vec2(1e-4));
+    highp float a = axes.x;
+    highp float b = axes.y;
+    highp float ellipse =
+        a * b * inversesqrt(max(b * b * c * c + a * a * s * s, 1e-12));
+    highp float ellipseSlope =
+        -ellipse * ellipse * ellipse * (a * a - b * b) * s * c /
         (a * a * b * b);
-    float x1 = waves0.x * theta + waves0.z;
-    float x2 = waves0.w * theta + waves1.y;
-    float x3 = waves1.z * theta + waves2.x;
-    float ripple = 1.0 + waves0.y * cos(x1) + waves1.x * cos(x2) +
+    highp float x1 = waves0.x * theta + waves0.z;
+    highp float x2 = waves0.w * theta + waves1.y;
+    highp float x3 = waves1.z * theta + waves2.x;
+    highp float ripple = 1.0 + waves0.y * cos(x1) + waves1.x * cos(x2) +
         waves1.w * cos(x3);
-    float rippleSlope = -waves0.y * waves0.x * sin(x1) -
+    highp float rippleSlope = -waves0.y * waves0.x * sin(x1) -
         waves1.x * waves0.w * sin(x2) - waves1.w * waves1.z * sin(x3);
-    float norm = max(waves2.y, 1e-4);
+    highp float norm = max(waves2.y, 1e-4);
     return vec2(
         ellipse * ripple / norm,
         (ellipseSlope * ripple + ellipse * rippleSlope) / norm
@@ -118,22 +129,35 @@ vec2 fakeBlobRadius(float theta, vec2 h, vec4 waves0, vec4 waves1, vec4 waves2) 
 
 // The angle of p around the blob's center. atan(0, 0) is undefined (SPIR-V
 // leaves it so), so the center itself takes angle 0.
-float fakeBlobAngle(vec2 p) {
+highp float fakeBlobAngle(highp vec2 p) {
     return dot(p, p) > 0.0 ? atan(p.y, p.x) : 0.0;
 }
 
 // The radial gap to the blob's outline, shortened by the outline's slope
 // where the ray meets it.
-float sdFakeBlob(vec2 p, vec2 h, vec4 waves0, vec4 waves1, vec4 waves2) {
-    vec2 radius = fakeBlobRadius(fakeBlobAngle(p), h, waves0, waves1, waves2);
-    float slope = radius.y / max(radius.x, 1e-4);
+float sdFakeBlob(
+    highp vec2 p,
+    highp vec2 h,
+    highp vec4 waves0,
+    highp vec4 waves1,
+    highp vec4 waves2
+) {
+    highp vec2 radius =
+        fakeBlobRadius(fakeBlobAngle(p), h, waves0, waves1, waves2);
+    highp float slope = radius.y / max(radius.x, 1e-4);
     return (length(p) - radius.x) * inversesqrt(1.0 + slope * slope);
 }
 
 // The blob's outward normal where the ray through p meets its outline.
-vec2 fakeBlobNormal(vec2 p, vec2 h, vec4 waves0, vec4 waves1, vec4 waves2) {
-    float theta = fakeBlobAngle(p);
-    vec2 radius = fakeBlobRadius(theta, h, waves0, waves1, waves2);
+vec2 fakeBlobNormal(
+    highp vec2 p,
+    highp vec2 h,
+    highp vec4 waves0,
+    highp vec4 waves1,
+    highp vec4 waves2
+) {
+    highp float theta = fakeBlobAngle(p);
+    highp vec2 radius = fakeBlobRadius(theta, h, waves0, waves1, waves2);
     vec2 radial = vec2(cos(theta), sin(theta));
     vec2 tangent = vec2(-radial.y, radial.x);
     return normalize(radial - tangent * (radius.y / max(radius.x, 1e-4)));

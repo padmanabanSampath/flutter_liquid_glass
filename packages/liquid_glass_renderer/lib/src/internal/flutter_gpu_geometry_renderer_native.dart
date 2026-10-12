@@ -770,6 +770,9 @@ class FlutterGpuGeometryRenderer {
 
   static void _submitOrDefer(gpu.CommandBuffer commandBuffer) {
     if (!_deferring) {
+      // An incremental update copies the previous matte, whose pass may
+      // still be deferred: submit that first so the queue keeps their order.
+      flushPendingSubmissions();
       commandBuffer.submit();
       return;
     }
