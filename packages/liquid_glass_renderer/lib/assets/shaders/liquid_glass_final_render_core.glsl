@@ -841,9 +841,17 @@ void main() {
     // rasterizes the silhouette: a pixel-aligned edge stays hard, so the
     // glint's first row is not diluted by a wider feather.
     float materialAlpha = clamp(signedEdgeDistance + 0.5, 0.0, 1.0);
+    // The geometry pass writes an all-zero texel wherever no shape or
+    // contour reaches, which decodes to no coverage. Testing the raw texel
+    // keeps those pixels out even where the decode goes wrong: the
+    // Mali-G615 Vulkan driver (r44p1) decoded them as lying on an edge,
+    // washing the whole layer rectangle in glass.
     if (
-        materialAlpha < 0.01 &&
-        contourCoverage(signedEdgeDistance).x * gContourAlpha < 0.01
+        geometryData.b <= 0.5 / 255.0 ||
+        (
+            materialAlpha < 0.01 &&
+            contourCoverage(signedEdgeDistance).x * gContourAlpha < 0.01
+        )
     ) {
         fragColor = vec4(0.0);
         return;
