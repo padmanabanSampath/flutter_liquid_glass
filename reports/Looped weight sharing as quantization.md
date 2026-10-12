@@ -6,15 +6,7 @@
 
 The five research notes behind this report were compiled on 2026-10-12 in an environment whose proxy blocked arXiv, OpenReview, ACL Anthology, the ICLR and NeurIPS proceedings, NVIDIA's site and Hugging Face. As a result, paper figures come from three kinds of source: search-engine excerpts of those pages, GitHub READMEs, configs and released data that the researchers read directly, and occasionally third-party summaries. Many 2026 papers are known only from abstracts or from one-line summaries in the Awesome-Loop-Models catalog ([catalog](https://github.com/huskydoge/Awesome-Loop-Models)).
 
-The labels in this report work as follows:
-
-- a claim with a source link and no tag is a published or released result, as excerpted;
-- *[secondary]* means the number appeared only in a third-party summary;
-- *[unreviewed]* flags single-author preprints, unreviewed repositories and catalog summaries;
-- *[derived]* marks algebra or arithmetic done by the research team or in this report;
-- *[inference]* marks a judgment that no source has tested.
-
-The numbers in the table below carry the most weight in the argument and should be checked against the PDFs before anyone commits engineering time.
+The labels work as follows. A claim with a source link and no tag is a published or released result, as excerpted; *[secondary]* means the number appeared only in a third-party summary; *[unreviewed]* flags single-author preprints, unreviewed repositories and catalog summaries; *[derived]* marks algebra or arithmetic done by the research team or in this report; and *[inference]* marks a judgment that no source has tested. The numbers in the table below carry the most weight in the argument and should be checked against the PDFs before anyone commits engineering time.
 
 | Number used here | How it was obtained | What to verify |
 |---|---|---|
@@ -31,16 +23,7 @@ The numbers in the table below carry the most weight in the argument and should 
 
 ## Looping converts parameters into depth, not into speed or smaller KV
 
-A looped (recursive, weight-shared) transformer stores K unique blocks and runs each of them several times. A 3× loop such as A→B→A→B→A→B gets six layers of depth from two blocks of weights.
-
-Trained from scratch, such models are strong:
-
-- **ALBERT** shares every layer. ALBERT-base shrinks from **108M to 31M parameters** while its GLUE average falls from 82.3 to 79.8, and almost all of that loss comes from sharing the FFN rather than attention ([ALBERT](https://arxiv.org/abs/1909.11942)).
-- **Mixture-of-Recursions (MoR)**: a 167M model with two recursions beats a 315M vanilla Transformer at equal training FLOPs, 43.1% vs 42.3% few-shot ([MoR](https://arxiv.org/pdf/2507.10524)).
-- **Ouro**: the 1.4B and 2.6B looped models, pretrained on 7.7T tokens, match 4B models and beat models of up to 8B on reasoning-heavy tasks. The authors attribute the gains to knowledge manipulation rather than knowledge capacity ([Ouro](https://arxiv.org/abs/2510.25741)).
-- **LARM**: the research identifies this as Idiap's depth-conditioned looped ASR encoder, the only looped model by that name it found *[inference]*. It reaches **11.34 test-clean WER with 7.7M parameters**, against 14.43 for a 28.9M unshared 16-block encoder on LibriSpeech-100h ([LARM](https://github.com/idiap/LARM)).
-
-All of these were trained into existence; none compresses a model that already exists.
+A looped (recursive, weight-shared) transformer stores K unique blocks and runs each of them several times, so a 3× loop such as A→B→A→B→A→B gets six layers of depth from two blocks of weights. Trained from scratch, such models are strong. ALBERT shares every layer and shrinks ALBERT-base from **108M to 31M parameters** while its GLUE average falls from 82.3 to 79.8, with almost all of that loss coming from sharing the FFN rather than attention ([ALBERT](https://arxiv.org/abs/1909.11942)). Mixture-of-Recursions' 167M model with two recursions beats a 315M vanilla Transformer at equal training FLOPs, 43.1% vs 42.3% few-shot ([MoR](https://arxiv.org/pdf/2507.10524)). Ouro's 1.4B and 2.6B looped models, pretrained on 7.7T tokens, match 4B models and beat models of up to 8B on reasoning-heavy tasks, gains the authors attribute to knowledge manipulation rather than knowledge capacity ([Ouro](https://arxiv.org/abs/2510.25741)). LARM, which the research identifies as Idiap's depth-conditioned looped ASR encoder (the only looped model by that name it found *[inference]*), reaches **11.34 test-clean WER with 7.7M parameters** against 14.43 for a 28.9M unshared 16-block encoder on LibriSpeech-100h ([LARM](https://github.com/idiap/LARM)). All of these were trained into existence; none compresses a model that already exists.
 
 | Quantity | K unique blocks run as N passes, vs an untied N-layer model | Evidence |
 |---|---|---|
@@ -52,21 +35,11 @@ All of these were trained into existence; none compresses a model that already e
 | Quality | Knowledge bounded by unique parameters; loops help reasoning | Ouro; retrofit data below |
 | Quantization robustness | Worse, because sharing and quantization remove overlapping redundancy | ALBERT keeps 93.4% at 4-bit, 72.5% at 3-bit ([quantization study](https://arxiv.org/pdf/2010.07109)) |
 
-The best public data on converted loops show what unique parameters buy. In the Retrofitted Recurrence release, TinyLlama was converted to a 4-8-4 prelude/core/coda model, keeping 16 of its 22 layers unique, and trained on about 26B tokens *[derived from logged FLOPs]* ([retrofit data](https://github.com/mcleish7/retrofitting-recurrence/tree/main/paper_plots/data)):
-
-- run as 24 layer passes, it scores **52.5 HellaSwag**, against 61.4 for the static model given the same continued training;
-- it needs four recurrences (40 passes, about twice the compute) to reach 60.5;
-- a 2-4-2 variant with only 8 unique layers **stalls at 42.7 even at 132 passes**.
-
-A September 2026 analysis likewise finds that extra loops help reasoning but hurt knowledge ([arXiv 2609.36636](https://arxiv.org/abs/2609.36636)) *[unreviewed]*. Unique parameters set the knowledge ceiling, and extra passes do not buy it back *[inference]*. Any scheme that removes unique weights from a token model must respect that limit.
+The best public data on converted loops show what unique parameters buy. In the Retrofitted Recurrence release, TinyLlama converted to a 4-8-4 prelude/core/coda model, keeping 16 of its 22 layers unique and trained on about 26B tokens *[derived from logged FLOPs]*, scores **52.5 HellaSwag** when run as 24 layer passes, against 61.4 for the static model given the same continued training. It needs four recurrences (40 passes, about twice the compute) to reach 60.5, and a 2-4-2 variant with only 8 unique layers **stalls at 42.7 even at 132 passes** ([retrofit data](https://github.com/mcleish7/retrofitting-recurrence/tree/main/paper_plots/data)). A September 2026 analysis likewise finds that extra loops help reasoning but hurt knowledge ([arXiv 2609.36636](https://arxiv.org/abs/2609.36636)) *[unreviewed]*. Unique parameters set the knowledge ceiling and extra passes do not buy it back *[inference]*, a limit that any scheme removing unique weights from a token model must respect.
 
 ### The payoff is bytes at rest, not speed
 
-For download size, a 1B-parameter int4 model holds about 0.55 GB of weights. Looping 4 unique blocks over 16 passes brings it to roughly 0.25–0.3 GB rather than 0.14 GB, because embeddings dominate small models *[derived]*. That matters most where storage ceilings are hard:
-
-- **Browsers**: default WebGPU limits are 128 MiB per storage binding and 256 MiB per buffer ([WebGPU spec](https://github.com/gpuweb/gpuweb/blob/main/spec/index.bs)). ONNX Runtime Web cannot run models above 4 GB ([ORT Web](https://onnxruntime.ai/docs/tutorials/web/large-models.html)), and Safari still lacks Memory64 ([caniuse](https://caniuse.com/wf-wasm-memory64)).
-- **iPhones**: developers report a per-app ceiling of about 6 GB even on 8–12 GB phones ([Apple forum](https://developer.apple.com/forums/thread/834805)) *[secondary]*.
-- **Jetson**: weights are a small share of the footprint. Qwen3-0.6B in INT4 peaks at **1,917 MB** on Orin Nano, although its weights are only about 0.3–0.4 GB ([TRT Edge-LLM benchmarks](https://github.com/NVIDIA/TensorRT-Edge-LLM/blob/0f52705723abfa8c6702654bfdcc082a728ed353/docs/source/user_guide/performance/performance-benchmarks.md)).
+For download size, a 1B-parameter int4 model holds about 0.55 GB of weights, and looping 4 unique blocks over 16 passes brings it to roughly 0.25–0.3 GB rather than 0.14 GB, because embeddings dominate small models *[derived]*. That matters most where storage ceilings are hard. Browsers default to WebGPU limits of 128 MiB per storage binding and 256 MiB per buffer ([WebGPU spec](https://github.com/gpuweb/gpuweb/blob/main/spec/index.bs)), ONNX Runtime Web cannot run models above 4 GB ([ORT Web](https://onnxruntime.ai/docs/tutorials/web/large-models.html)), and Safari still lacks Memory64 ([caniuse](https://caniuse.com/wf-wasm-memory64)). On iPhones, developers report a per-app ceiling of about 6 GB even on 8–12 GB phones ([Apple forum](https://developer.apple.com/forums/thread/834805)) *[secondary]*. On Jetson, weights are a small share of the footprint: Qwen3-0.6B in INT4 peaks at **1,917 MB** on Orin Nano although its weights are only about 0.3–0.4 GB ([TRT Edge-LLM benchmarks](https://github.com/NVIDIA/TensorRT-Edge-LLM/blob/0f52705723abfa8c6702654bfdcc082a728ed353/docs/source/user_guide/performance/performance-benchmarks.md)).
 
 Speed is another matter. Batch-1 decode on these devices is bandwidth-bound, and their on-chip caches are far smaller than a 1B-class block of about 6–100 MB *[derived]*:
 
@@ -82,19 +55,11 @@ So a cyclic loop re-reads every block from DRAM, and only small blocks repeated 
 
 ### Norms and FiLM differentiate passes almost free; per-pass LoRA costs real bits
 
-Shared weights force every pass to compute the same function of its input, so looped models add small per-pass parameters that let one pass behave differently from another. From lightest to heaviest:
-
-- **Per-pass normalization** (the user's approach): a separate gain and shift per pass, about 2d numbers per block per pass.
-- **FiLM, as in LARM**: the smooth version. After each application of the shared encoder, LARM sets h⁽ᵏ⁾ = γ(d̄) ⊙ â⁽ᵏ⁾ + β(d̄), with normalized depth d̄ = (k−1)/(K−1). Together with a clock embedding and input re-injection, this lowers 100h test-clean WER from **12.70 for naive looping to 11.34** ([LARM README](https://github.com/idiap/LARM); [LARM paper](https://arxiv.org/html/2606.04678v2)). Because γ and β are functions of normalized depth, FiLM can interpolate to pass counts it never trained on, which per-pass lookup tables cannot *[inference]*.
-- **RD-ViT**: a shared LoRA plus a per-loop scale vector, costing about 1.5K parameters in its Tiny model ([RD-ViT](https://arxiv.org/pdf/2605.03999)).
-- **Relaxed Recursive Transformers (RRT)**: a per-position LoRA, initialized by truncated SVD (ranks 64–512) of the residual between each original layer and the shared weights ([rrt-lora](https://github.com/avramdj/rrt-lora); [RRT](https://arxiv.org/pdf/2410.20672)).
+Shared weights force every pass to compute the same function of its input, so looped models add small per-pass parameters that let one pass behave differently from another. The lightest is the user's per-pass normalization, a separate gain and shift per pass costing about 2d numbers per block per pass. LARM's FiLM is the smooth version: after each application of the shared encoder it sets h⁽ᵏ⁾ = γ(d̄) ⊙ â⁽ᵏ⁾ + β(d̄) with normalized depth d̄ = (k−1)/(K−1), and together with a clock embedding and input re-injection this lowers 100h test-clean WER from **12.70 for naive looping to 11.34** ([LARM README](https://github.com/idiap/LARM); [LARM paper](https://arxiv.org/html/2606.04678v2)). Because γ and β are functions of normalized depth, FiLM can interpolate to pass counts it never trained on, which per-pass lookup tables cannot *[inference]*. RD-ViT sits between the two, pairing a shared LoRA with a per-loop scale vector that costs about 1.5K parameters in its Tiny model ([RD-ViT](https://arxiv.org/pdf/2605.03999)). The heaviest option is RRT's per-position LoRA, initialized by truncated SVD (ranks 64–512) of the residual between each original layer and the shared weights ([rrt-lora](https://github.com/avramdj/rrt-lora); [RRT](https://arxiv.org/pdf/2410.20672)).
 
 On the post-training-quantization side, LoopQ shows the same pattern for already-looped models. It keeps one shared quantized backbone plus loop-dependent activation scales and cross-loop adapters that touch **under 0.12% of parameters**, and at W4A4 it improves average accuracy by 68.8% over the strongest static PTQ baseline ([LoopQ](https://arxiv.org/abs/2605.16343)).
 
-Two cautions carry into any design:
-
-1. **Hidden-state scale grows with depth.** This is why naive recursion fails in VLMs. RecursiveVLM fixes it with an RMSNorm connector and per-recursion supervision, for about +7% over vanilla recursive baselines ([RecursiveVLM](https://arxiv.org/html/2602.09080v1)).
-2. **Adapters shared across loops drift toward late loop positions** unless training randomly drops them ([Loop Dropout](https://arxiv.org/abs/2609.34218)) *[unreviewed]*.
+Two cautions carry into any design. Hidden-state scale grows with depth, which is why naive recursion fails in VLMs; RecursiveVLM fixes it with an RMSNorm connector and per-recursion supervision for about +7% over vanilla recursive baselines ([RecursiveVLM](https://arxiv.org/html/2602.09080v1)). And adapters shared across loops drift toward late loop positions unless training randomly drops them ([Loop Dropout](https://arxiv.org/abs/2609.34218)) *[unreviewed]*.
 
 | Mechanism | Extra parameters | Extrapolates to new pass counts | Closed-form fit from calibration |
 |---|---|---|---|
@@ -130,14 +95,7 @@ The user's pipeline is the standard heavy path. It distills a looped student fro
 
 ### Every training-free attempt on record collapses or barely compresses
 
-The negative evidence is consistent across language and vision:
-
-- **Frozen-layer repetition.** In "Transformer Layers as Painters," replacing middle layers of a frozen Llama-2 with copies of the middle-most layer is the worst variant tested. It **degrades quickly to the random baseline**, worse than simply skipping those layers ([Painters](https://arxiv.org/abs/2407.09298)).
-- **Training-free looping.** Re-applying blocks of frozen checkpoints works only with damped sub-steps, keeps every original weight, and "naive block reapplication usually degrades performance" ([Training-Free Looped Transformers](https://arxiv.org/html/2605.23872v1)).
-- **Freshly converted models.** Retrofitted Llama-3.2-1B 2-4-2 runs start training at **12.4–14.3 nats**, above uniform-random (ln 128K ≈ 11.8). The caveat is that the first step runs at the sampled training recurrence, not at r=1 ([retrofit CSVs](https://github.com/mcleish7/retrofitting-recurrence/tree/main/paper_plots)).
-- **Layer averaging.** CHERRY's averaged blocks "start with high loss before training recovers it" ([CHERRY](https://arxiv.org/abs/2606.31796)) *[unreviewed]*.
-- **Vision.** MiniViT reports training collapse as the number of shared layers grows ([MiniViT](https://openaccess.thecvf.com/content/CVPR2022/papers/Zhang_MiniViT_Compressing_Vision_Transformers_With_Weight_Multiplexing_CVPR_2022_paper.pdf)).
-- **Weight-space fit is not model quality.** A 2026 study coupled cross-layer SVD subspaces and **cut Frobenius error by 37%** on Pythia-1.4B, yet perplexity rose from **50.17 to 159.14** ([arXiv 2605.30836](https://arxiv.org/abs/2605.30836)).
+The negative evidence is consistent across language and vision. In "Transformer Layers as Painters," replacing middle layers of a frozen Llama-2 with copies of the middle-most layer is the worst variant tested: it **degrades quickly to the random baseline**, worse than simply skipping those layers ([Painters](https://arxiv.org/abs/2407.09298)). Training-free re-application of frozen blocks works only with damped sub-steps and keeps every original weight, and its authors note that naive block re-application "usually degrades performance" ([Training-Free Looped Transformers](https://arxiv.org/html/2605.23872v1)). Freshly converted Llama-3.2-1B 2-4-2 retrofits start training at **12.4–14.3 nats**, above uniform-random (ln 128K ≈ 11.8), with the caveat that the first step runs at the sampled training recurrence rather than r=1 ([retrofit CSVs](https://github.com/mcleish7/retrofitting-recurrence/tree/main/paper_plots)). CHERRY's averaged blocks "start with high loss before training recovers it" ([CHERRY](https://arxiv.org/abs/2606.31796)) *[unreviewed]*, and MiniViT reports training collapse as the number of shared vision layers grows ([MiniViT](https://openaccess.thecvf.com/content/CVPR2022/papers/Zhang_MiniViT_Compressing_Vision_Transformers_With_Weight_Multiplexing_CVPR_2022_paper.pdf)). Weight-space fit is not model quality either: a 2026 study that coupled cross-layer SVD subspaces **cut Frobenius error by 37%** on Pythia-1.4B, yet perplexity rose from **50.17 to 159.14** ([arXiv 2605.30836](https://arxiv.org/abs/2605.30836)).
 
 The most valuable missing number is RRT's accuracy right after SVD initialization, before any uptraining. No accessible source reports it.
 
@@ -155,11 +113,7 @@ Head-level sharing does a little better. DirectShare re-uses pretrained head wei
 
 ### Predicting a layer from its partner saves ½·log₂(1/(1−R²)) bits per weight
 
-Treat the shared base as a predictor, and the per-layer residual as what must still be coded *[derived]*:
-
-1. Under the Gaussian rate-distortion model behind quantization theory, coding a matrix to distortion D costs ½·log₂(σ²/D) bits per weight.
-2. The best aligned, rescaled prediction from a partner layer leaves residual energy (1−R²)·σ².
-3. Prediction therefore saves **½·log₂(1/(1−R²)) bits per predicted weight**.
+Treat the shared base as a predictor and the per-layer residual as what must still be coded *[derived]*. Under the Gaussian rate-distortion model behind quantization theory, coding a matrix to distortion D costs ½·log₂(σ²/D) bits per weight; the best aligned, rescaled prediction from a partner layer leaves residual energy (1−R²)·σ², so prediction saves **½·log₂(1/(1−R²)) bits per predicted weight**.
 
 Here `R² = 1 − ‖(Wᵢ − Ŵᵢ)Xᵢ‖² / ‖WᵢXᵢ‖²`, measured in the activation-weighted metric that GPTQ-style quantizers optimize.
 
@@ -174,36 +128,17 @@ A pure loop codes that residual with zero bits. To match int4 fidelity, the resi
 | 0.98 (0.99) | 2.8 | The most similar individual head pairs (same source) |
 | 0.996 (0.998) | 4.0 | A pure loop (zero-bit residual) at int4 fidelity |
 
-For bulk weights, trained models sit in the top rows of that table:
+For bulk weights, trained models sit in the top rows of that table. DOCS finds that standard similarity indices cannot tell different layers' weights apart, because the weights stay near their orthogonal initialization, and adjacent layers are only modestly more alike ([DOCS](https://arxiv.org/html/2501.16650v1)). Even after optimal permutation, ViT FFN neurons correlate at only **0.385** across layers and attention at **0.210** ([Verma et al.](https://openreview.net/pdf?id=t8iuiH46g0)); these are activation correlations, a proxy for the weight-space R² the formula needs. LegoLM names large between-layer scale differences as the main obstacle to sharing ([LegoLM](https://arxiv.org/abs/2608.08652)) *[unreviewed]*, an obstacle that per-pass scales remove cheaply.
 
-- DOCS finds that standard similarity indices cannot tell different layers' weights apart, because the weights stay near their orthogonal initialization; adjacent layers are only modestly more alike ([DOCS](https://arxiv.org/html/2501.16650v1)).
-- Even after optimal permutation, ViT FFN neurons correlate at only **0.385** across layers, and attention at **0.210** ([Verma et al.](https://openreview.net/pdf?id=t8iuiH46g0)). These are activation correlations, a proxy for the weight-space R² the formula needs.
-- LegoLM names large between-layer scale differences as the main obstacle to sharing ([LegoLM](https://arxiv.org/abs/2608.08652)) *[unreviewed]*. Per-pass scales remove that obstacle cheaply.
-
-A worked estimate for a modern LLM *[derived]* uses four assumptions:
-
-- the middle 60% of layers are candidates;
-- attention is a third of block parameters;
-- 30% of candidate heads reach R² ≈ 0.9;
-- FFN units sit at R² ≈ 0.15.
-
-With one keyframe per three-layer group, two-thirds of candidate layers are predicted, and the saving is about 0.1 bpw, roughly 2.5% of int4's 4.125 bpw. If per-pass scales lift FFN R² to 0.5, the saving roughly doubles to about 5%. The 2–10% range quoted above brackets this arithmetic, leaving room for the census to find more redundancy than the literature suggests.
+A worked estimate for a modern LLM *[derived]* assumes that the middle 60% of layers are candidates, attention is a third of block parameters, 30% of candidate heads reach R² ≈ 0.9 and FFN units sit at R² ≈ 0.15. With one keyframe per three-layer group, two-thirds of candidate layers are predicted and the saving is about 0.1 bpw, roughly 2.5% of int4's 4.125 bpw. If per-pass scales lift FFN R² to 0.5, the saving roughly doubles to about 5%. The 2–10% range quoted above brackets this arithmetic, leaving room for the census to find more redundancy than the literature suggests.
 
 ### A guaranteed floor and a trap
 
-*[inference]* Give every tied pass a fitted branch gain αᵢ on its residual update; this is the scalar core of FiLM. Setting α→0 turns that pass into a skipped layer, so a calibration-fitted loop can never be worse than dropping the layers whose unique weights it removed. That floor is measurable:
-
-- Dropping 10 of Llama-2-13B's 40 layers keeps MMLU at 52.22 vs 55.0 ([ShortGPT](https://arxiv.org/html/2403.03853v1)).
-- A 25% cut on Llama-2-7B drops the zero-shot average from **62.8 to 47.4** ([FinerCut](https://arxiv.org/pdf/2405.18218)).
-- Training-free weight blending (MKA) loses 2.82% MMLU at 43.75% layer compression on Llama-3-8B ([MKA](https://aclanthology.org/2024.emnlp-main.987/)).
-
-The trap is that savings on low-importance layers are also available from mixed-precision bit allocation or plain layer dropping, with no sharing at all. Any sharing result has to beat those baselines, not only uniform int4.
+Give every tied pass a fitted branch gain αᵢ on its residual update, the scalar core of FiLM, and the method acquires a floor *[inference]*: setting α→0 turns that pass into a skipped layer, so a calibration-fitted loop can never be worse than dropping the layers whose unique weights it removed. That floor is measurable. Dropping 10 of Llama-2-13B's 40 layers keeps MMLU at 52.22 vs 55.0 ([ShortGPT](https://arxiv.org/html/2403.03853v1)), but a 25% cut on Llama-2-7B drops the zero-shot average from **62.8 to 47.4** ([FinerCut](https://arxiv.org/pdf/2405.18218)), and training-free weight blending (MKA) loses 2.82% MMLU at 43.75% layer compression on Llama-3-8B ([MKA](https://aclanthology.org/2024.emnlp-main.987/)). The trap is that savings on low-importance layers are equally available from mixed-precision bit allocation or plain layer dropping, with no sharing at all, so any sharing result has to beat those baselines and not only uniform int4.
 
 ### Verdict: infeasible as a 2–3× post-training loop, modest as a residual coder, valuable as stage 0
 
-1. **A calibration-only conversion of a pretrained LLM into a 2–3× looped model at usable quality is not feasible** (high confidence). Independent results show collapse, the rate-distortion arithmetic says the required redundancy is missing by orders of magnitude, and no source reports a counterexample.
-2. **A calibration-fitted cross-depth residual coder on top of int4 is feasible but small for LLMs** (medium confidence). It should save about 2–10% of bytes at int4-level quality, with the gain concentrated in similar attention heads. The census can move that figure either way.
-3. **The same machinery is valuable as a closed-form stage 0 for the user's distillation pipeline** (medium confidence). It gives an aligned, Hessian-weighted initialization that beats Average, with per-pass parameters already fitted. That should shorten stage A, but it cannot remove stage A for real 2–3× loops.
+The evidence supports three verdicts at different confidence levels. With high confidence, **a calibration-only conversion of a pretrained LLM into a 2–3× looped model at usable quality is not feasible**: independent results show collapse, the rate-distortion arithmetic says the required redundancy is missing by orders of magnitude, and no source reports a counterexample. With medium confidence, **a calibration-fitted cross-depth residual coder on top of int4 is feasible but small for LLMs**, saving about 2–10% of bytes at int4-level quality with the gain concentrated in similar attention heads; the census can move that figure either way. Also with medium confidence, **the same machinery is valuable as a closed-form stage 0 for the user's distillation pipeline**, because it gives an aligned, Hessian-weighted initialization that beats Average and arrives with per-pass parameters already fitted. That should shorten stage A, but it cannot remove stage A for real 2–3× loops.
 
 The contrast with fine-tunes is telling. BitDelta compresses a fine-tune's delta to one bit per weight at MT-Bench 6.47 vs 6.56, while a same-memory rank-128 delta reaches only 5.85 ([BitDelta](https://arxiv.org/html/2402.10193v3)). "Base plus 1-bit delta" works superbly across models that share a training history, but not across layers that never did. If the user ships several task variants of one backbone, cross-model delta compression is the proven route.
 
@@ -217,18 +152,7 @@ For a group g of tied layers, each shareable linear map in layer i is stored as:
 
 `Ŵᵢ = diag(sᵢ) · Q(B_g) · diag(tᵢ) + Rᵢ`
 
-- **Q(B_g)** is a shared base quantized at 4 bits (3 bits at most) after a Hadamard rotation.
-- **sᵢ and tᵢ** are fp16 per-pass output- and input-channel scales.
-- **Rᵢ** is the per-layer residual: rank-r with 4-bit factors, a dense 1–3-bit code fitted against the decoded base, or zero (a pure loop for that unit).
-- **αᵢ** is a scalar or vector gain on the sublayer's residual-branch output.
-
-The user's three differentiation mechanisms map onto these components *[derived]*:
-
-- **Per-pass norm gains become tᵢ.** An RMSNorm gain folds into the next linear map's input columns, the computational invariance SliceGPT exploits ([SliceGPT](https://arxiv.org/abs/2401.15024)).
-- **FiLM-style γ and β on a branch become sᵢ, αᵢ and a bias.**
-- **Per-pass LoRA becomes a rank-r Rᵢ.**
-
-All three can be fitted in closed form. If the student must run at unseen pass counts, regressing the fitted per-pass values on normalized depth yields a LARM-style smooth FiLM *[inference]*.
+Here Q(B_g) is a shared base quantized at 4 bits (3 at most) after a Hadamard rotation; sᵢ and tᵢ are fp16 per-pass output- and input-channel scales; Rᵢ is the per-layer residual, which is rank-r with 4-bit factors, a dense 1–3-bit code fitted against the decoded base, or zero (a pure loop for that unit); and αᵢ is a scalar or vector gain on the sublayer's residual-branch output. The user's three differentiation mechanisms map onto these components *[derived]*. Per-pass norm gains become tᵢ, because an RMSNorm gain folds into the next linear map's input columns, the computational invariance SliceGPT exploits ([SliceGPT](https://arxiv.org/abs/2401.15024)). FiLM-style γ and β on a branch become sᵢ, αᵢ and a bias, and per-pass LoRA becomes a rank-r Rᵢ. All three can be fitted in closed form, and if the student must run at unseen pass counts, regressing the fitted per-pass values on normalized depth yields a LARM-style smooth FiLM *[inference]*.
 
 **Base.** Two choices compete. A keyframe base is one real layer coded directly, with the others predicted from its decoded form. It never loses to direct quantization in the Gaussian model, so it is the default when R² is low *[derived]*. A Hessian-weighted mean pays off only when R² is high and the residuals are low-rank. This mirrors RRT's finding that Stepwise wins for strict ties and Average for relaxed ones ([RRT](https://arxiv.org/html/2410.20672v1)).
 
@@ -246,12 +170,7 @@ All three can be fitted in closed form. If the student must run at unseen pass c
 
 ### Share late-middle input-side projections; keep the edges and output-side writes private
 
-Every source agrees on depth:
-
-- **Keep the edges unique.** The first one to three layers and the last one to two are distinct and sensitive ([Painters](https://arxiv.org/abs/2407.09298); [Lad et al.](https://arxiv.org/pdf/2406.19384); [Gromov et al.](https://arxiv.org/html/2403.17887v2)). MoR's best scheme, Middle-Cycle, keeps first and last unique ([MoR](https://arxiv.org/html/2507.10524v1)), and LegoLM protects boundary blocks for the same reason ([LegoLM](https://arxiv.org/abs/2608.08652)).
-- **Tie the late middle.** Second-half layers of Llama 3.1 and Qwen 3 contribute much less than first-half layers ([Csordás et al.](https://arxiv.org/html/2505.13898v1)).
-- **The retrofit data agree.** In the Llama-3.2-1B retrofit, a core built from layers 10–13, just before the coda, reached final loss **2.91**, against 3.15–3.18 for early-middle layers and **3.84** for evenly spread layers 2, 5, 8 and 11 ([retrofit data](https://github.com/mcleish7/retrofitting-recurrence/tree/main/paper_plots)).
-- **ViTs follow suit.** Blocks 8–12 of 12 are the most prunable ([Elastic ViTs](https://arxiv.org/html/2510.17700v1)).
+Every source agrees on depth. The first one to three layers and the last one to two are distinct and sensitive and should stay unique ([Painters](https://arxiv.org/abs/2407.09298); [Lad et al.](https://arxiv.org/pdf/2406.19384); [Gromov et al.](https://arxiv.org/html/2403.17887v2)); MoR's best scheme, Middle-Cycle, keeps first and last unique ([MoR](https://arxiv.org/html/2507.10524v1)), and LegoLM protects boundary blocks for the same reason ([LegoLM](https://arxiv.org/abs/2608.08652)). The late middle is the place to tie. Second-half layers of Llama 3.1 and Qwen 3 contribute much less than first-half layers ([Csordás et al.](https://arxiv.org/html/2505.13898v1)), and in the Llama-3.2-1B retrofit a core built from layers 10–13, just before the coda, reached final loss **2.91** against 3.15–3.18 for early-middle layers and **3.84** for evenly spread layers 2, 5, 8 and 11 ([retrofit data](https://github.com/mcleish7/retrofitting-recurrence/tree/main/paper_plots)). ViTs follow suit, with blocks 8–12 of 12 the most prunable ([Elastic ViTs](https://arxiv.org/html/2510.17700v1)).
 
 By sublayer, three published configurations together favor sharing projections that read from the residual stream and keeping private the ones that write layer-specific updates into it *[inference]*.
 
@@ -270,21 +189,11 @@ The tie pattern needs testing *[inference]*. The user's A→B→A→B→A→B ti
 
 Averaging several nearly orthogonal matrices shrinks and blurs them, which is the likely reason Stepwise beats Average for strict ties *[inference]*. LiSA reports that sharing attention without rearranging heads "proves to be ineffective" ([LiSA](https://github.com/takagi97/lisa)).
 
-The symmetries that leave a layer's function unchanged can be applied to each layer before tying:
-
-- permutation of FFN hidden units (gate/up rows together with down columns);
-- permutation of heads within a GQA group;
-- per-head invertible maps on the V/O pair;
-- per-head maps on the Q/K pair. Under RoPE these must commute with the rotary blocks, so only per-frequency 2×2 rotations or permutations qualify *[inference]*.
+Four symmetries leave a layer's function unchanged and can be applied to each layer before tying: permuting FFN hidden units (gate/up rows together with down columns), permuting heads within a GQA group, per-head invertible maps on the V/O pair, and per-head maps on the Q/K pair, which under RoPE must commute with the rotary blocks, leaving only per-frequency 2×2 rotations or permutations *[inference]*.
 
 The global residual-stream rotation used by QuaRot and SliceGPT cannot make two layers more alike, because it applies to all of them at once. It stays compatible with sharing for the same reason *[inference]*.
 
-The tools exist:
-
-- Verma et al. solve one linear assignment per FFN sublayer on activation correlations from about 10K tokens ([repo](https://github.com/nverma1/merging-ffs-compression)).
-- Head-wise sharing matches heads on concatenated Q‖K weights ([Head-wise](https://aclanthology.org/2024.findings-emnlp.144.pdf)).
-- An ICML 2025 paper aligns attention by closed-form orthogonal Procrustes over its continuous rotation symmetry ([rotation symmetry](https://arxiv.org/pdf/2502.00264)).
-- SLOA warns that Q–K and V–O are composed operators, so they must be aligned as pairs and merged sequentially along the execution path ([SLOA](https://arxiv.org/abs/2610.06415)).
+The tools exist. Verma et al. solve one linear assignment per FFN sublayer on activation correlations from about 10K tokens ([repo](https://github.com/nverma1/merging-ffs-compression)); head-wise sharing matches heads on concatenated Q‖K weights ([Head-wise](https://aclanthology.org/2024.findings-emnlp.144.pdf)); an ICML 2025 paper aligns attention by closed-form orthogonal Procrustes over its continuous rotation symmetry ([rotation symmetry](https://arxiv.org/pdf/2502.00264)); and SLOA warns that Q–K and V–O are composed operators that must be aligned as pairs and merged sequentially along the execution path ([SLOA](https://arxiv.org/abs/2610.06415)).
 
 No published work combines these alignments with a looped tie schedule. Whether aligned Average beats Stepwise even for strict ties is an open, cheap experiment *[inference]*.
 
@@ -294,18 +203,11 @@ Take a group of layers i that share one tensor Ŵ, with calibration inputs Xᵢ 
 
 `tr((Ŵ − W*)·H_Σ·(Ŵ − W*)ᵀ) + C`, where `H_Σ = Σᵢ Hᵢ` and `W* = (Σᵢ WᵢHᵢ)·H_Σ⁻¹`
 
-Three consequences follow:
-
-1. **Existing solvers work unchanged.** GPTQ, AWQ, QuIP# or QTIP quantize the shared tensor when handed (W*, H_Σ).
-2. **The constant C is the irreducible sharing error**, the census's core number. RRT's Average initialization is the special case Hᵢ = I.
-3. **The gradient is a sum over passes.** It is 2Σᵢ(Ŵ − Wᵢ)Hᵢ, one term per tied position. **This is the closed-form counterpart of "gradients from every pass land on the shared block."** The PTQ fit solves stage A's per-layer linearized loss without a single optimizer step.
+Three consequences follow. Existing solvers work unchanged, since GPTQ, AWQ, QuIP# or QTIP quantize the shared tensor when handed (W*, H_Σ). The constant C is the irreducible sharing error and the census's core number, and RRT's Average initialization is the special case Hᵢ = I. Most usefully, the gradient is a sum over tied positions, 2Σᵢ(Ŵ − Wᵢ)Hᵢ: **this is the closed-form counterpart of "gradients from every pass land on the shared block,"** so the PTQ fit solves stage A's per-layer linearized loss without a single optimizer step.
 
 There is direct precedent. "Quantizing Looped Transformers" shows that GPTQ Hessians from the first recurrence step alone underperform round-to-nearest on 5 of 9 checkpoints. Accumulating Hessians across steps beats both on all 9 and recovers bf16-level accuracy on Huginn ([arXiv 2609.30820](https://arxiv.org/abs/2609.30820)) *[unreviewed]*.
 
-Two refinements are worth adding *[inference]*:
-
-- **Weight each tied position by downstream sensitivity**, not just activation energy, to resist the late-pass drift seen in looped training ([Loop Dropout](https://arxiv.org/abs/2609.34218)). Per-row output scales make the Hessian row-dependent; GuidedQuant is a precedent for keeping separate Hessians per row group ([GPTQ overview](https://www.emergentmind.com/topics/generative-pretrained-transformer-quantization-gptq)).
-- **Re-collect inputs after compressing.** Each Xᵢ depends on the already-compressed layers before it, so collect inputs again through the compressed model and refit sequentially ([error propagation](https://arxiv.org/html/2504.09629v1)).
+Two refinements are worth adding *[inference]*. Weight each tied position by downstream sensitivity rather than activation energy alone, to resist the late-pass drift seen in looped training ([Loop Dropout](https://arxiv.org/abs/2609.34218)); per-row output scales make the Hessian row-dependent, and GuidedQuant is a precedent for keeping separate Hessians per row group ([GPTQ overview](https://www.emergentmind.com/topics/generative-pretrained-transformer-quantization-gptq)). And because each Xᵢ depends on the already-compressed layers before it, re-collect inputs through the compressed model and refit sequentially ([error propagation](https://arxiv.org/html/2504.09629v1)).
 
 | Step | What is fitted | How | Closed form? |
 |---|---|---|---|
@@ -346,23 +248,11 @@ Scalar GPTQ on LLaMA-7B at context 2048 gives 6.21 at 4 bits and 16.28 at 3 bits
 
 Codebook sharing is not the lever. Fixed lattice and trellis codebooks such as QuIP#'s E8P are already shared by every layer, and codebook storage is negligible at 2 bpw, so the win must come from sharing the codes themselves ([QuIP#](https://arxiv.org/abs/2402.04396)) *[inference]*.
 
-The closest published cross-depth codec is MCWC. It treats depth like video, aligning layers, predicting each from already-decoded ones and entropy-coding quantized residuals. It reports perplexity 15.95 at about 4.2 bits against 16.40 for GPTQ-W4 and 15.33 dense, on an unnamed model ([MCWC](https://arxiv.org/html/2605.24754v1)) *[unreviewed]*. That gain is the size the R² arithmetic predicts.
+The closest published cross-depth codec is MCWC. It treats depth like video, aligning layers, predicting each from already-decoded ones and entropy-coding quantized residuals. It reports perplexity 15.95 at about 4.2 bits against 16.40 for GPTQ-W4 and 15.33 dense, on an unnamed model ([MCWC](https://arxiv.org/html/2605.24754v1)) *[unreviewed]*. That gain is about the size the R² arithmetic predicts *[inference]*.
 
 ### Stack on int4 with loop-aware calibration rather than replacing it
 
-Shared weights are more fragile under quantization, so the base needs at least the bits an untied layer would get:
-
-- ALBERT keeps 93.4% of performance at 4 bits but only 72.5% at 3 bits ([quantization study](https://arxiv.org/pdf/2010.07109)).
-- On Ouro-1.4B, group-128 INT8 is lossless (WikiText-2 10.69 vs 10.68). INT4 round-to-nearest reaches 12.48 and cuts GSM8K at 8 loops from 78.5 to 60.0 ([repo](https://github.com/Nemo0412/Loop_Transformer_Quantization)) *[unreviewed]*.
-- In weight-tied recursive reasoners, per-tensor 4-bit activations take Sudoku from 84.1% to 0%, and per-block scaling restores it ([arXiv 2607.16237](https://arxiv.org/html/2607.16237)).
-
-The stacking rules follow *[inference]*:
-
-- quantize the base at int4 or higher, with a Hadamard rotation and the summed Hessian;
-- keep per-pass scales, gains and norms in fp16;
-- use MX-style block scaling if activations go to int4 or int8;
-- give extra bits to non-shared entry points, which "Quantizing Looped Transformers" finds most exposed ([arXiv 2609.30820](https://arxiv.org/abs/2609.30820));
-- budget all gains as sub-multiplicative.
+Shared weights are more fragile under quantization, so the base needs at least the bits an untied layer would get. ALBERT keeps 93.4% of performance at 4 bits but only 72.5% at 3 bits ([quantization study](https://arxiv.org/pdf/2010.07109)). On Ouro-1.4B, group-128 INT8 is lossless (WikiText-2 10.69 vs 10.68), while INT4 round-to-nearest reaches 12.48 and cuts GSM8K at 8 loops from 78.5 to 60.0 ([repo](https://github.com/Nemo0412/Loop_Transformer_Quantization)) *[unreviewed]*. In weight-tied recursive reasoners, per-tensor 4-bit activations take Sudoku from 84.1% to 0% until per-block scaling restores it ([arXiv 2607.16237](https://arxiv.org/html/2607.16237)). The stacking rules follow *[inference]*: quantize the base at int4 or higher with a Hadamard rotation and the summed Hessian, keep per-pass scales, gains and norms in fp16, use MX-style block scaling if activations go to int4 or int8, give extra bits to the non-shared entry points that "Quantizing Looped Transformers" finds most exposed ([arXiv 2609.30820](https://arxiv.org/abs/2609.30820)), and budget all gains as sub-multiplicative.
 
 Structure stacked on quantization has a mixed record:
 
@@ -375,18 +265,11 @@ Structure plus int4 can beat a lower bit width at the same memory, but loses bad
 
 ### ViT and per-frame video encoders are the most promising, least measured targets
 
-Vision has the strongest near-PTQ evidence:
-
-- ViTs have a much more uniform layer-to-layer representation structure than CNNs ([Raghu et al.](https://proceedings.neurips.cc/paper/2021/file/652cf38361a209088302ba2b8b7f51e0-Paper.pdf)).
-- FiPS uses a cross-layer shared base with sparse factors, initialized by SVD and refined by block-wise reconstruction on calibration data. It compresses DeiT-B and Swin-L MLPs to 25–40% of their parameters within 1 point of top-1 ([FiPS](https://arxiv.org/abs/2411.09816)), which is essentially rung one of the healing ladder below.
-- Training-free entropy-based pruning removes up to 91.7% of VideoMAE-B blocks with competitive transfer, probably measured after downstream fine-tuning ([arXiv 2602.03918](https://arxiv.org/html/2602.03918v1)). That suggests masked video encoders are heavily over-deep.
+Vision has the strongest near-PTQ evidence. ViTs have a much more uniform layer-to-layer representation structure than CNNs ([Raghu et al.](https://proceedings.neurips.cc/paper/2021/file/652cf38361a209088302ba2b8b7f51e0-Paper.pdf)). FiPS, a cross-layer shared base with sparse factors initialized by SVD and refined by block-wise reconstruction on calibration data, compresses DeiT-B and Swin-L MLPs to 25–40% of their parameters within 1 point of top-1 ([FiPS](https://arxiv.org/abs/2411.09816)), which is essentially rung one of the healing ladder below. Training-free entropy-based pruning removes up to 91.7% of VideoMAE-B blocks with competitive transfer, probably measured after downstream fine-tuning ([arXiv 2602.03918](https://arxiv.org/html/2602.03918v1)), which suggests masked video encoders are heavily over-deep.
 
 Calibration is cheap for vision *[inference]*. Hessians come from patch tokens, so about 1K representative frames already yield hundreds of thousands of tokens. Many ViTs use learned or absolute position embeddings rather than RoPE, which frees Q/K alignment to use any per-head invertible map.
 
-Per-frame encoding is compute-bound, so sharing buys storage and model switching, not frame rate:
-
-- ViT-B/16 at 224 pixels takes about 17–20 ms on Orin Nano ([FastPose-ViT](https://arxiv.org/pdf/2512.09792)).
-- INT8 results on Orin are erratic. A ViT-S encoder gained nothing in isolation, and its full encoder ran 2.7× slower ([NVIDIA forum](https://forums.developer.nvidia.com/t/tensorrt-model-optimizer-int8-quantization-causes-2-7x-performance-regression-on-jetson-orin-nano-4gb-vit-s-dpt-architecture/357835)), while RF-DETR gained 1.26× ([embedl](https://huggingface.co/embedl/rf-detr-base)).
+Per-frame encoding is compute-bound, so sharing buys storage and model switching, not frame rate. ViT-B/16 at 224 pixels takes about 17–20 ms on Orin Nano ([FastPose-ViT](https://arxiv.org/pdf/2512.09792)), and INT8 results on Orin are erratic: a ViT-S encoder gained nothing in isolation and its full encoder ran 2.7× slower ([NVIDIA forum](https://forums.developer.nvidia.com/t/tensorrt-model-optimizer-int8-quantization-causes-2-7x-performance-regression-on-jetson-orin-nano-4gb-vit-s-dpt-architecture/357835)), while RF-DETR gained 1.26× ([embedl](https://huggingface.co/embedl/rf-detr-base)).
 
 The per-pass gains αᵢ also offer a natural knob for running fewer passes on frames that barely change, but no source has measured that *[inference]*.
 
@@ -412,18 +295,7 @@ Unfused low-rank side paths are measurably costly. A rank-48 unmerged LoRA on an
 
 A converted model keeps its full KV cache, because tied layers still see different inputs and so produce different keys and values. KV grows with passes times context. For a 1B-class GQA model that is about 2 KB per token per pass, roughly 128 MB for 16 passes at 4K context *[derived]*, which is comparable to the weights of a heavily shared model.
 
-The training-free remedies are:
-
-- KV quantization;
-- MiniCache, which merges similar KV across adjacent middle and deep layers for 1.53× compression alone and 5.02× with 4-bit ([MiniCache](https://neurips.cc/virtual/2024/poster/93380)).
-
-Cross-loop KV sharing belongs to models that were trained as loops:
-
-- MoR shares KV from the first recursion;
-- Ouro shares last-step KV, saving about 4× at decode ([guide](https://insiderllm.com/guides/ouro-2b-thinking-looped-language-model-local/)) *[secondary]*;
-- ResidualQuant stores an anchor plus 2-bit residuals across loops, using 80.7% less KV storage ([ResidualQuant](https://arxiv.org/abs/2610.10381)) *[unreviewed]*.
-
-That last case is instructive: cross-depth residual coding already works for KV in genuinely looped models, because their KV across loops is highly similar ([MoR](https://arxiv.org/html/2507.10524v1)). Per-frame vision encoders keep no autoregressive KV at all.
+The training-free remedies are KV quantization and MiniCache, which merges similar KV across adjacent middle and deep layers for 1.53× compression alone and 5.02× with 4-bit ([MiniCache](https://neurips.cc/virtual/2024/poster/93380)). Cross-loop KV sharing belongs to models trained as loops: MoR shares first-recursion KV, Ouro shares last-step KV for about 4× at decode ([guide](https://insiderllm.com/guides/ouro-2b-thinking-looped-language-model-local/)) *[secondary]*, and ResidualQuant stores an anchor plus 2-bit residuals across loops for 80.7% less KV storage ([ResidualQuant](https://arxiv.org/abs/2610.10381)) *[unreviewed]*. That last case is instructive, because cross-depth residual coding already works for KV in genuinely looped models, whose KV across loops is highly similar ([MoR](https://arxiv.org/html/2507.10524v1)). Per-frame vision encoders keep no autoregressive KV at all.
 
 ## Expected quality climbs a healing ladder from calibration to stage A and B
 
@@ -437,12 +309,7 @@ The ranges below are this report's estimates, anchored to the cited analogues. N
 | 3. Stage B | LM head plus last few layers, or the task head | Small | Beats LoRA healing after layer removal | Linear or task-head refit | [Reassessing Layer Pruning](https://arxiv.org/html/2411.15558) |
 | 4. Uptraining with KD | Full looped student | 10⁹–6×10¹⁰ tokens | 30% at 1B tokens; 2× near parity at 15–60B | 2× at +1.0 top-1; 9.7× at −2.0 | [FlexiGPT](https://aclanthology.org/2025.naacl-long.31/); [RRT](https://arxiv.org/abs/2410.20672); [MiniViT](https://openaccess.thecvf.com/content/CVPR2022/html/Zhang_MiniViT_Compressing_Vision_Transformers_With_Weight_Multiplexing_CVPR_2022_paper.html) |
 
-The ladder maps directly onto the user's pipeline:
-
-- **Rung 0** is stage A solved in closed form, layer by layer. The summed Hessian stands in for the summed gradient, and the teacher's per-layer outputs are the targets.
-- **Rung 1** is stage A restricted to the cheap parameters, which PTQ papers call block-wise reconstruction. It needs nothing beyond the user's existing feature-matching loss.
-- **Rung 2** is the user's current stage A on a far smaller token budget. It starts from an initialization that is already aligned, Hessian-weighted and per-pass calibrated, instead of from Average or Stepwise.
-- **Rung 3** is stage B, unchanged.
+The ladder maps directly onto the user's pipeline. Rung 0 is stage A solved in closed form, layer by layer, with the summed Hessian standing in for the summed gradient and the teacher's per-layer outputs as targets. Rung 1 is stage A restricted to the cheap parameters, which PTQ papers call block-wise reconstruction and which needs nothing beyond the user's existing feature-matching loss. Rung 2 is the user's current stage A on a far smaller token budget, started from an initialization that is already aligned, Hessian-weighted and per-pass calibrated instead of from Average or Stepwise. Rung 3 is stage B, unchanged.
 
 When calibration alone falls short, the minimal healing budget sits at rungs 1–2, roughly **10⁶–10⁸ tokens** *[inference]*. The anchors are DeltaLLM's 30–40M tokens and the 3,000 QLoRA updates of the OLMo3-7B FFN-merging run. That budget buys 15–25% fewer unique parameters at a cost of a few points of quality.
 
@@ -454,19 +321,7 @@ During stage A, match the teacher's output at every tied position, as RecursiveV
 
 The first experiment costs no training and measures the one number that bounds every outcome above.
 
-**Inputs.** For token models, collect Hessians for every linear map from about 256×2048 calibration tokens, the budget Basis Sharing uses ([config](https://raw.githubusercontent.com/TUDa-HWAI/Basis_Sharing/main/tasks/configs/wikitext_ppl/llama/share2/share_llama_7b_20.yaml)). For vision and video models, use about 1K representative frames.
-
-**Procedure.** For every candidate pair and three-layer group in the middle 25–90% of depth, in both contiguous and distance-two (A→B→A→B) patterns, working per head and per FFN neuron group:
-
-1. Align with permutations and Procrustes.
-2. Fit per-pass scales.
-3. Compute R² in the whitened metric.
-4. Record the whitened residual's spectrum, to choose between low-rank and dense residuals.
-5. Record each layer's drop-out importance.
-
-**Outputs.** A predicted bits-saved map from ½·log₂(1/(1−R²)), and a model-level byte saving at int4 fidelity. Compute the same saving for the two competing explanations, mixed-precision allocation and plain layer dropping.
-
-**Cost.** Hessian collection is ordinary forward passes, and the largest assignment problems are about 11K×11K for a 7B-class FFN, so the whole census should fit in GPU-hours on one machine *[inference]*.
+For token models, collect Hessians for every linear map from about 256×2048 calibration tokens, the budget Basis Sharing uses ([config](https://raw.githubusercontent.com/TUDa-HWAI/Basis_Sharing/main/tasks/configs/wikitext_ppl/llama/share2/share_llama_7b_20.yaml)); for vision and video models, use about 1K representative frames. Then, for every candidate pair and three-layer group in the middle 25–90% of depth, in both contiguous and distance-two (A→B→A→B) patterns and working per head and per FFN neuron group, align with permutations and Procrustes, fit per-pass scales, compute R² in the whitened metric, and record the whitened residual's spectrum (to choose between low-rank and dense residuals) along with each layer's drop-out importance. The output is a predicted bits-saved map from ½·log₂(1/(1−R²)) and a model-level byte saving at int4 fidelity, computed alongside the same saving for the two competing explanations, mixed-precision allocation and plain layer dropping. Hessian collection is ordinary forward passes and the largest assignment problems are about 11K×11K for a 7B-class FFN, so the whole census should fit in GPU-hours on one machine *[inference]*.
 
 These gates are this report's proposals *[inference]*:
 
@@ -488,24 +343,10 @@ These gates are this report's proposals *[inference]*:
 | 5. Device prototype | Does it ship? | Mode A codec plus a Mode B llama.cpp prototype; measure download, load time, RAM and tok/s on phone, browser and Orin Nano | Days | Passes G4 |
 | 6. Optional true loop | Is a real 3× student worth the training? | RRT-style relaxed loop with FiLM, initialized from stage 4, using 10⁹–10¹⁰ tokens of the user's distillation | Weeks | Product decision |
 
-The risks, in the order they are likely to bite *[inference]*:
-
-1. The census finds the low R² the literature predicts, and the method shrinks to a minor add-on to int4.
-2. Newer models prove less tolerant. Basis Sharing's +2.1 PPL on LLaMA-1-7B becomes +9.4 on Llama-3.1-8B ([LowRankArena](https://github.com/Zishan-Shao/lowrankarena)).
-3. Proxy objectives improve while the model worsens.
-4. Shared bases amplify quantization error.
-5. Mode B needs per-backend kernels that no runtime ships today.
-6. Vision redundancy, inferred from representations and training-heavy methods, fails to survive calibration-only fitting.
-7. Anchor numbers that are still unverified excerpts turn out to be wrong.
+The risks, in the order they are likely to bite *[inference]*, are that the census finds the low R² the literature predicts and the method shrinks to a minor add-on to int4; that newer models prove less tolerant, as Basis Sharing's +2.1 PPL on LLaMA-1-7B becomes +9.4 on Llama-3.1-8B ([LowRankArena](https://github.com/Zishan-Shao/lowrankarena)); that proxy objectives improve while the model worsens; that shared bases amplify quantization error; that Mode B needs per-backend kernels no runtime ships today; that vision redundancy, inferred from representations and training-heavy methods, fails to survive calibration-only fitting; and that anchor numbers still standing as unverified excerpts turn out to be wrong.
 
 ## Conclusion
 
-Seen through quantization theory, the looping principle is predictive coding across depth, and its value is set entirely by how predictable one layer is from another. That framing explains the literature at once:
-
-- Pretrained layers are nearly unpredictable from each other, so calibration-only looping collapses and training-free sharing earns little.
-- Fine-tunes are highly predictable from their base, so base-plus-1-bit-delta coding is near-lossless across models.
-- Layers of a genuinely looped model are predictable from each other, so cross-loop residual coding works for their KV caches.
-
-Looping is therefore not a substitute for quantization of an existing model. Redundancy must exist before it can be coded, and for weights that redundancy is created by training (sharing from the start, distillation, or growth by duplication), not uncovered by calibration.
+Seen through quantization theory, the looping principle is predictive coding across depth, and its value is set entirely by how predictable one layer is from another. That one framing explains the literature: pretrained layers are nearly unpredictable from each other, so calibration-only looping collapses and training-free sharing earns little; fine-tunes are highly predictable from their base, so base-plus-1-bit-delta coding is near-lossless across models; and layers of a genuinely looped model are predictable from each other, so cross-loop residual coding works for their KV caches. Looping is therefore not a substitute for quantization of an existing model. Redundancy must exist before it can be coded, and for weights that redundancy is created by training (sharing from the start, distillation, or growth by duplication), not uncovered by calibration.
 
 For the user, the practical consequence is to reorder the plan rather than abandon it. Build the census and the closed-form fitter first. For about a day's work they return either a small, shippable download-size codec on top of int4 or a clean kill. Either way they produce a far better stage 0 for the existing distillation pipeline: per-pass norms, FiLM gains and per-pass LoRA start from their least-squares values instead of identity, and the summed gradient that stage A already computes starts from the summed Hessian it approximates. Whether to build a true 3× looped student stays a decision about training budget and runtime support, not about calibration. RAM savings would need GGUF alias tables and per-slot tensors, any speedup would need back-to-back repeat order or early exit, and KV sharing would have to be trained in rather than bolted on.
