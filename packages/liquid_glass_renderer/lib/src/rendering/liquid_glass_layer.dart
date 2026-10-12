@@ -1247,7 +1247,13 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
   }
 
   (double, double, double, double, double, double) _currentCoordinateMapping() {
-    final globalToMatte = Matrix4.inverted(shaderCoordinateTransform);
+    // A kept-alive page that scrolled out of a PageView is given a zero
+    // paint transform, yet can still repaint. Nothing it paints is seen, so
+    // keep the last mapping instead of failing to invert.
+    final globalToMatte = Matrix4.tryInvert(shaderCoordinateTransform);
+    if (globalToMatte == null) {
+      return _coordinateMapping ?? (1, 0, 0, 1, 0, 0);
+    }
     final origin = MatrixUtils.transformPoint(globalToMatte, Offset.zero);
     final axisX = MatrixUtils.transformPoint(globalToMatte, const Offset(1, 0));
     final axisY = MatrixUtils.transformPoint(globalToMatte, const Offset(0, 1));

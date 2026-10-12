@@ -1,14 +1,19 @@
 package com.example.liquid_glass_renderer_example
 
+import android.content.Intent
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.WindowManager
 import java.io.File
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterShellArgs
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    /** The Impeller backend requested at launch; null for the default. */
+    private var launchBackend: String? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setShowWhenLocked(true)
@@ -16,8 +21,39 @@ class MainActivity : FlutterActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
+    // Arguments passed here take precedence over the manifest's engine flags.
+    override fun getFlutterShellArgs(): FlutterShellArgs {
+        val args = super.getFlutterShellArgs()
+        launchBackend = RendererBackend.forLaunch(this)
+        launchBackend?.let { args.add("--impeller-backend=$it") }
+        return args
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            RENDERER_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "get" -> result.success(
+                    mapOf(
+                        "choice" to RendererBackend.preference(this),
+                        "launched" to (launchBackend ?: "default"),
+                        "auto" to (RendererBackend.autoBackend() ?: "default"),
+                    ),
+                )
+                "set" -> {
+                    RendererBackend.setPreference(this, call.arguments as String)
+                    result.success(null)
+                }
+                "restart" -> {
+                    result.success(null)
+                    restart()
+                }
+                else -> result.notImplemented()
+            }
+        }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             CHANNEL,
@@ -97,8 +133,19 @@ class MainActivity : FlutterActivity() {
         return configuration
     }
 
+    /**
+     * Restarts the app in a new process, where the engine reads the renderer
+     * choice again: the engine flags are read once per process.
+     */
+    private fun restart() {
+        val launch = packageManager.getLaunchIntentForPackage(packageName) ?: return
+        startActivity(Intent.makeRestartActivityTask(launch.component))
+        Runtime.getRuntime().exit(0)
+    }
+
     companion object {
         private const val CHANNEL = "dev.liquid_glass_renderer/benchmark"
+        private const val RENDERER_CHANNEL = "dev.liquid_glass_renderer/renderer"
         private const val EXTRA_SCENARIO = "scenario"
         private const val EXTRA_WARMUP_SECONDS = "warmupSeconds"
         private const val EXTRA_MEASURE_SECONDS = "measureSeconds"
