@@ -67,28 +67,35 @@ class LiquidGlassSettings with Equatable {
 
   /// Sea glass: tumbled, frosted, colored glass with a soft rim.
   ///
-  /// The lens is a rounded pebble rather than iOS 27's flat face with a
-  /// deep bevel: the whole face of a small shape curves, and larger shapes
-  /// keep a 36 pt curved shoulder, so they refract more, as Apple's thicker
-  /// glass does. It bends gently, so the glass stays flat and light. The
-  /// crisp glint and dark border are dimmed to suit a matte surface, and
-  /// there is no inner bevel shadow. The frost is light enough that the
-  /// backdrop stays readable; raise [frost] (and use
-  /// [SeaGlassFinish.frosted]) for a milkier pebble.
+  /// The lens is a domed pebble rather than iOS 27's flat face with a deep
+  /// bevel: it curves across the whole face, from flat at the center to
+  /// steep at the outline, and grows with the shape. A pebble
+  /// [refractionHeight] wide bends the backdrop at its outline by
+  /// [refractionAmount]; smaller ones bend proportionally less, larger ones
+  /// keep that. Grid lines seen through a large pebble bow outward toward
+  /// its rim, as through a glass dome. Add [dispersion] for rainbow edges on
+  /// clear glass, such as `SeaGlassFinish.clear()` with no [frost].
+  ///
+  /// The crisp glint and dark border are dimmed to suit a matte surface, and
+  /// there is no inner bevel shadow; the finish's gloss lights the dome
+  /// instead. The frost is light enough that the backdrop stays readable;
+  /// raise [frost] (and use [SeaGlassFinish.frosted]) for a milkier pebble.
   ///
   /// Give each shape its body color with [LiquidGlassAppearance.seaGlass].
   factory LiquidGlassSettings.seaGlass({
     SeaGlassFinish finish = const SeaGlassFinish(),
     double frost = 2,
-    double refractionHeight = 36,
-    double refractionAmount = 16,
+    double refractionHeight = 100,
+    double refractionAmount = 30,
     double highlight = 0.3,
+    double dispersion = 0,
   }) => LiquidGlassSettings(
     refractionHeight: refractionHeight,
     refractionAmount: refractionAmount,
     refractionFitsShape: false,
     frost: frost,
     highlight: highlight,
+    dispersion: dispersion,
     contourStrength: 0.12,
     contourDirectionality: 1,
     bevelShadowStrength: 0,

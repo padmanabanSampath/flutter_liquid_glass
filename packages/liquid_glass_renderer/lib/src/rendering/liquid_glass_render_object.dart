@@ -878,6 +878,8 @@ abstract class LiquidGlassRenderObject extends RenderProxyBox
         );
       case LiquidOval():
         canvas.drawOval(rect, paint);
+      case LiquidBlob():
+        canvas.drawPath(shape.getOuterPath(rect), paint);
       case LiquidRoundedRectangle(:final borderRadius):
         canvas.drawRRect(
           RRect.fromRectAndRadius(rect, Radius.circular(borderRadius)),

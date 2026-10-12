@@ -134,7 +134,9 @@ again, and that sample is the expensive part (see
 [Performance](#performance)).
 
 Shapes are `LiquidRoundedSuperellipse` (squircles and capsules), `LiquidOval`
-and `LiquidRoundedRectangle`, each with one corner radius. Exterior shadows go
+and `LiquidRoundedRectangle`, each with one corner radius, and `LiquidBlob`,
+an organic outline (see [Pebbles and living glass](#pebbles-and-living-glass)).
+Exterior shadows go
 on the shape, and the renderer cuts them out behind the translucent glass:
 
 ```dart
@@ -182,8 +184,15 @@ LiquidGlassLayer(
 )
 ```
 
-A layer renders at most 16 shapes. Plain `LiquidGlass` shapes in the same layer
-don't blend.
+A layer renders at most 16 shapes; in debug builds it warns when it has to
+leave some out. Plain `LiquidGlass` shapes in the same layer don't blend.
+`FakeGlass` blends a group too (see [FakeGlass](#fakeglass)).
+
+Each shape joins only the members within two blend radii of the nearest one,
+so the union doesn't depend on shapes far away. When a shape moves, the
+layer copies its last geometry and redraws only around that shape: dragging
+one tile of a 16-shape panel redraws about a fifth of the geometry. The result
+is the same as redrawing all of it.
 
 ## iOS 27 presets and the Liquid Glass slider
 
@@ -290,8 +299,10 @@ A layer where every shape has the same appearance keeps a smaller shader path.
 Sea glass is glass the sea has tumbled into a frosted pebble. It stays
 translucent, but its surface is pitted into a fine sugary frost, its rounded
 rim is paler than its body, and the glass itself is colored throughout, so it
-is deepest in color where it is thickest. Compared to iOS 27 glass it is
-flatter: a gentle pebble lens, no inner shadow, and a soft glint.
+is deepest in color where it is thickest. Compared to iOS 27 glass it is a
+dome rather than a flat face with a bevel: the whole face bends the backdrop
+like a lens, there is no inner shadow, and the light glints off its rounded
+shoulders.
 
 Start from the `seaGlass` preset and give each shape a body color:
 
@@ -323,8 +334,8 @@ it filters the backdrop like colored glass. The color is what the glass shows
 over white at full thickness, and its alpha is the density, so `0` is
 colorless frosted glass. `SeaGlassColors` holds colors sampled from real sea
 glass: `seafoam`, `kellyGreen`, `aqua`, `cornflower`, `cobalt`, `lavender`,
-`citron`, `amber`, `brown`, `teal` and `white`. Each shape can have its own,
-and merged shapes blend them.
+`citron`, `amber`, `brown` (root beer), `teal`, `white`, `ruby`, `clear` and
+`mist`. Each shape can have its own, and merged shapes blend them.
 
 The surface is a `SeaGlassFinish` on the layer's settings
 (`LiquidGlassSettings.seaGlassFinish`), shared by every shape:
@@ -338,6 +349,7 @@ The surface is a `SeaGlassFinish` on the layer's settings
 | `grain`, `grainSize` | The fine sugary texture of the pits. |
 | `sparkle` | Tiny glints where single pits catch the light. |
 | `pitting` | How far the pits scatter the backdrop, in logical pixels, on top of `frost`. |
+| `gloss` | How brightly the dome catches the light: a curved glint on the shoulder facing it, a softer one on the far wall, and a thin bright line along the outline. The flat center stays untouched. |
 | `stochasticFrost` | Renders `frost` in the glass pass by scattering samples, instead of a blur pass (default `true`, see below). |
 
 `SeaGlassFinish()` keeps the backdrop readable. `SeaGlassFinish.frosted()` is
@@ -354,15 +366,19 @@ opacity, merging like droplets, a glow under the finger) but its physics
 differ:
 
 - **Refraction.** A pebble's face is curved all over, not flat with a bevel,
-  so the `seaGlass` preset turns `refractionFitsShape` off: small shapes
-  curve across the whole face and larger ones keep a 36 pt curved shoulder,
-  so they refract more, as Apple's thicker glass does. The frost and the pits
-  then smear what the lens bends.
+  so the `seaGlass` preset turns `refractionFitsShape` off and makes the
+  lens a 100 pt dome: it is flat at the center and steepens toward the
+  outline, so grid lines seen through a pebble bow outward toward its rim,
+  as through a magnifying glass. Smaller pebbles bend proportionally less.
+  The frost and the pits then smear what the lens bends. For a clear lens,
+  use `SeaGlassFinish.clear()` with `frost: 0`, and a little `dispersion`
+  (around `0.06`) for rainbow edges.
 - **Thickness.** Larger glass behaves like thicker material: a large card
   absorbs more of its body color and scatters light more softly than a
   small button with the same finish.
-- **Lighting.** A rough surface has no crisp highlight. The glint is dimmed,
-  the frosted rim glows on the side facing the light, and the pits are tiny
+- **Lighting.** A rough surface has no crisp highlight. Apple's glint is
+  dimmed; instead the light glints off the dome's shoulder facing it
+  (`gloss`), the frosted rim glows on that side, and the pits are tiny
   facets that glint when they face it.
 - **Merging.** Shapes in a `LiquidGlassBlendGroup` fuse like droplets, as on
   iOS. Between two pebbles the bridge is thin glass, so it is paler and
@@ -370,9 +386,37 @@ differ:
   shape's frost lies on that shape's own surface: it moves, turns and
   stretches with the shape, and cross-fades without a seam across a
   bridge.
-- **Interaction.** `LiquidStretch.seaGlass` gives a solid pebble's give:
-  less swell when pressed, about half the stretch and more resistance than
-  Apple's gel-like glass.
+- **Interaction.** `LiquidStretch.seaGlass` behaves like a heavier drop than
+  Apple's gel-like glass. It swells a little less when pressed and resists
+  the drag more, but still stretches far enough to flow into a neighbor in a
+  blend group, and it wobbles back when let go (`wobble`). In the example's
+  quick settings, tiles pulled toward each other bridge and pinch off again.
+
+### Pebbles and living glass
+
+Sea glass is rarely a perfect oval. `LiquidBlob` is the ellipse that fills
+its box with its radius rippled by up to three waves (`LiquidWave`), so the
+outline stays within the box. `LiquidBlob.pebble(seed: ...)` is a tumbled,
+lumpy pebble, different for every seed, and `LiquidBlob.cookie` a scalloped
+one. Blobs refract, light, blend and work in FakeGlass like the other shapes.
+
+Change the waves every frame and the glass lives: `LiquidBlob.alive(time: t)`
+turns its waves at different speeds and swells them, so the outline flows and
+breathes. Drive `time` from a ticker:
+
+```dart
+ValueListenableBuilder(
+  valueListenable: seconds, // updated by a Ticker
+  builder: (context, time, _) => LiquidGlass(
+    shape: LiquidBlob.alive(time: time),
+    appearance: LiquidGlassAppearance.seaGlass(color: SeaGlassColors.amber),
+    child: const SizedBox(width: 160, height: 150),
+  ),
+)
+```
+
+When a shape changes, only the geometry around it is drawn again, so one
+living pebble costs a fraction of the layer's matte per frame.
 
 ### Light direction
 
@@ -519,8 +563,15 @@ the web, no Flutter GPU). Set `fake: true` on a layer to use it on purpose, or
 to test that path.
 
 It keeps frost, tint, the color model, the glint, the border, the inner
-shadow, visibility and exterior shadows. It leaves out refraction,
-`backdropShrink`, `dispersion` and vibrancy.
+shadow, visibility, exterior shadows and blend groups. It leaves out
+refraction, `backdropShrink`, `dispersion` and vibrancy.
+
+A blend group joins the way full glass does. Each member's surface draws the
+group's smooth union where that member is the nearest, with up to three
+neighbors, and the bridges between members get their own clipped backdrop
+filter. All of them share the layer's one backdrop copy. Across a bridge the
+tint blends from one member to the next, but the backdrop's color transfer
+switches halfway.
 
 `FakeGlass` is not a cheaper mode: it pays for the same backdrop readback and
 blur as full glass (see below).
@@ -590,9 +641,9 @@ Best practices:
   debug builds the package logs a warning when a frame makes more than one
   independent copy.
 - **Keep layers small.** A layer's cost grows with the area its glass covers.
-- **Don't animate blend-group geometry every frame.** Moving one shape in a
-  group re-renders the whole group's geometry, which can miss 120 Hz. Static
-  geometry is cached.
+- **Keep moving glass small.** Moving a shape redraws the geometry around
+  it, out to three blend radii for a grouped shape. Static geometry is
+  cached.
 - **Keep shadows few and small.**
 - **Mind the blur.** Impeller stops downsampling at σ ≤ 4, which makes small
   blurs cost more than σ7; σ20 costs about three times σ7.
@@ -614,8 +665,9 @@ flutter run --enable-impeller --enable-flutter-gpu
 ```
 
 The playground has an iOS-style tab bar and toolbar, blending and color
-scenes, the text loupe, a sea glass quick settings panel (the color scene
-turns into merging sea glass pebbles under the Sea Glass style), every preset
+scenes, the text loupe, a sea glass quick settings panel (under the Sea Glass
+style the color scene turns into the sea glass palette: twelve pebbles that
+merge, and one that is alive), every preset
 in light and dark, the Liquid Glass slider, sea glass finish controls, a light
 angle, full/fake switching and several backdrops. Settings you tune can be
 saved as custom presets.

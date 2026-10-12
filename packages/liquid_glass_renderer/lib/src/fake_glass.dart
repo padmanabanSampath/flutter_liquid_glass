@@ -19,9 +19,10 @@ import 'package:meta/meta.dart';
 ///
 /// Tint and saturation use one native affine color filter on Impeller and
 /// Skia. Each shape renders tint, contour, bevel, and highlight with one
-/// lightweight analytic-SDF fragment draw on both backends. Fake shapes inside
-/// a [LiquidGlassBlendGroup] remain visually independent; this fallback does
-/// not compute smooth-union geometry.
+/// lightweight analytic-SDF fragment draw on both backends. Inside a
+/// [LiquidGlassLayer], the shapes of a [LiquidGlassBlendGroup] join: each
+/// draws the group's smooth union where it is the nearest member, and the
+/// layer covers the bridges with the backdrop too.
 class FakeGlass extends StatelessWidget {
   /// Creates a new [FakeGlass] widget with the given [child], [shape], and
   /// [settings].

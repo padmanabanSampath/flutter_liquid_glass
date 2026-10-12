@@ -7,6 +7,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'package:liquid_glass_renderer/src/internal/backdrop_capture_debug.dart';
+import 'package:liquid_glass_renderer/src/internal/fake_glass_blend.dart';
 import 'package:liquid_glass_renderer/src/internal/fake_glass_color.dart';
 import 'package:liquid_glass_renderer/src/internal/paint_fake_glass_surface.dart';
 import 'package:liquid_glass_renderer/src/internal/render_liquid_glass_geometry.dart';
@@ -112,6 +113,13 @@ class RenderConsolidatedFakeGlassLayer extends LiquidGlassRenderObject
   final Map<LiquidGlassShapeRenderObject, _SeparateBackdropLayers>
   _separateBackdropLayers = {};
   ImageFilter? _cachedFilter;
+
+  /// Blend groups drawn as one smooth union: each member's surface, and
+  /// the bridges between members with their own backdrop pass.
+  Map<LiquidGlassShapeRenderObject, FakeGlassSurfaceGroup> _groupSurfaces =
+      const {};
+  List<_Bridge> _bridges = const [];
+  final List<_SeparateBackdropLayers> _bridgeLayers = [];
 
   /// Shorter side of the smallest shape sharing the consolidated filter.
   double _shortSide = 10000;
@@ -263,6 +271,12 @@ class RenderConsolidatedFakeGlassLayer extends LiquidGlassRenderObject
         _shortSide = rebuiltShortSide;
         _cachedFilter = null;
       }
+      _rebuildGroups();
+      for (final bridge in _bridges) {
+        final bridgeBounds = bridge.path.getBounds();
+        rebuiltBounds =
+            rebuiltBounds?.expandToInclude(bridgeBounds) ?? bridgeBounds;
+      }
       _cachedClipPath = rebuiltPath;
       _cachedClipBounds = rebuiltBounds;
       _cachedClipClasses = rebuiltClasses;
@@ -321,6 +335,8 @@ class RenderConsolidatedFakeGlassLayer extends LiquidGlassRenderObject
             shapesWithGeometry,
           ) ||
           paintedBackdrop;
+      paintedBackdrop =
+          _paintBridgeBackdrops(effectContext, effectOffset) || paintedBackdrop;
       assert(() {
         if (paintedBackdrop) {
           _debugLastPaintStages.add(_FakeGlassPaintStage.backdrop);
@@ -364,6 +380,7 @@ class RenderConsolidatedFakeGlassLayer extends LiquidGlassRenderObject
           settings: settings,
           appearance: shape.appearance,
           devicePixelRatio: devicePixelRatio,
+          group: _groupSurfaces[shape.renderObject],
         );
         canvas.restore();
       }
@@ -428,6 +445,107 @@ class RenderConsolidatedFakeGlassLayer extends LiquidGlassRenderObject
       _separateBackdropLayers.remove(renderObject)!.dispose();
     }
     return active.isNotEmpty;
+  }
+
+  /// Finds the blend groups whose members come close enough to blend: for
+  /// each member, the neighbors its surface draws the union with, and for
+  /// each group the bridges its backdrop must also cover.
+  void _rebuildGroups() {
+    final surfaces = <LiquidGlassShapeRenderObject, FakeGlassSurfaceGroup>{};
+    final bridges = <_Bridge>[];
+    final outset = fakeGlassSurfaceOutset(settings);
+    for (final (_, geometry, geometryToLayer) in shapesWithGeometry) {
+      final blend = geometry.blend;
+      if (blend <= 0 || geometry.shapes.length < 2) continue;
+      final members = <FakeGlassBlendMember>[];
+      final renderObjects = <LiquidGlassShapeRenderObject>[];
+      for (final shape in geometry.shapes) {
+        if (_backdropClass(shape.appearance) == 0) continue;
+        members.add(
+          FakeGlassBlendMember(
+            index: members.length,
+            shape: shape.shape,
+            size: shape.renderObject.size,
+            shapeToLayer: shape.shapeToGeometry == null
+                ? geometryToLayer
+                : geometryToLayer.multiplied(shape.shapeToGeometry!),
+            appearance: shape.appearance,
+          ),
+        );
+        renderObjects.add(shape.renderObject);
+      }
+      if (members.length < 2) continue;
+      for (final (index, member) in members.indexed) {
+        // A pixel a surface draws, within its bridge outset of its box, is
+        // never nearer a member it leaves out.
+        final neighbors = fakeGlassNeighbors(
+          member,
+          members,
+          2 * (blend + outset) + 2,
+        );
+        if (neighbors.isEmpty) continue;
+        surfaces[renderObjects[index]] = (
+          blend: blend,
+          self: member,
+          members: neighbors,
+        );
+      }
+      // Each half of a bridge takes the backdrop of the member it is
+      // nearer to.
+      for (final MapEntry(key: member, value: path) in fakeGlassBridges(
+        members,
+        blend,
+      ).entries) {
+        bridges.add((
+          path: path,
+          appearance: member.appearance,
+          shortSide: member.size.shortestSide,
+        ));
+      }
+    }
+    _groupSurfaces = surfaces;
+    _bridges = bridges;
+  }
+
+  /// Paints the backdrop beneath the bridges between blended members, each
+  /// half with its member's transfer, from the layer's capture.
+  bool _paintBridgeBackdrops(PaintingContext context, Offset offset) {
+    while (_bridgeLayers.length > _bridges.length) {
+      _bridgeLayers.removeLast().dispose();
+    }
+    var painted = false;
+    for (final (index, bridge) in _bridges.indexed) {
+      final filter = _backdropClass(bridge.appearance) == 2
+          ? _hasBackdropEffect
+                ? _cachedFilter ??= _buildBackdropFilter()
+                : null
+          : fakeGlassBackdropFilter(
+              settings,
+              bridge.appearance,
+              shortSide: bridge.shortSide,
+            );
+      if (filter == null) continue;
+      if (_bridgeLayers.length <= index) {
+        _bridgeLayers.add(_SeparateBackdropLayers());
+      }
+      final layers = _bridgeLayers[index];
+      final backdropLayer = (layers.backdrop.layer ??= BackdropFilterLayer())
+        ..filter = filter
+        ..blendMode = BlendMode.srcOver
+        ..backdropKey = _effectiveBackdropKey;
+      layers.clip.layer = context.pushClipPath(
+        true,
+        offset,
+        bridge.path.getBounds(),
+        bridge.path,
+        (clipContext, clipOffset) {
+          clipContext.pushLayer(backdropLayer, (_, _) {}, clipOffset);
+        },
+        oldLayer: layers.clip.layer,
+      );
+      painted = true;
+    }
+    return painted;
   }
 
   bool _clipInputsMatch() {
@@ -506,6 +624,10 @@ class RenderConsolidatedFakeGlassLayer extends LiquidGlassRenderObject
   void _releaseGlassLayers() {
     _backdropLayer.layer = null;
     _clipLayer.layer = null;
+    for (final layers in _bridgeLayers) {
+      layers.dispose();
+    }
+    _bridgeLayers.clear();
     for (final layers in _separateBackdropLayers.values) {
       layers.dispose();
     }
@@ -535,3 +657,11 @@ class _SeparateBackdropLayers {
     backdrop.layer = null;
   }
 }
+
+/// The bridges a blend group member is nearest to, and the member's
+/// appearance and short side, which set their backdrop transfer.
+typedef _Bridge = ({
+  Path path,
+  LiquidGlassAppearance appearance,
+  double shortSide,
+});

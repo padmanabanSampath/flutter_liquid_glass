@@ -137,6 +137,66 @@ float sdfEllipse(vec2 p, vec2 r) {
     return dot(p / r, p / r) > 1.0 ? distance : -distance;
 }
 
+// A blob (LiquidBlob): the ellipse of half size h, its radius rippled by up
+// to three waves. waves0..2 hold (count, amplitude, phase) of each wave in a
+// row, then the normalization that keeps the outline within the ellipse:
+// (count1, amplitude1, phase1, count2), (amplitude2, phase2, count3,
+// amplitude3), (phase3, norm, -, -). Returns the outline's radius at
+// angle theta and its derivative with respect to theta. Mirrors
+// LiquidBlob.radiusAt.
+vec2 blobRadius(
+    float theta,
+    vec2 h,
+    vec4 waves0,
+    vec4 waves1,
+    vec4 waves2
+) {
+    float c = cos(theta);
+    float s = sin(theta);
+    vec2 axes = max(h, vec2(1e-4));
+    float a = axes.x;
+    float b = axes.y;
+    float ellipse = a * b * inversesqrt(max(b * b * c * c + a * a * s * s, 1e-12));
+    float ellipseSlope = -ellipse * ellipse * ellipse * (a * a - b * b) * s * c /
+        (a * a * b * b);
+    float x1 = waves0.x * theta + waves0.z;
+    float x2 = waves0.w * theta + waves1.y;
+    float x3 = waves1.z * theta + waves2.x;
+    float ripple = 1.0 + waves0.y * cos(x1) + waves1.x * cos(x2) +
+        waves1.w * cos(x3);
+    float rippleSlope = -waves0.y * waves0.x * sin(x1) -
+        waves1.x * waves0.w * sin(x2) - waves1.w * waves1.z * sin(x3);
+    float norm = max(waves2.y, 1e-4);
+    return vec2(
+        ellipse * ripple / norm,
+        (ellipseSlope * ripple + ellipse * rippleSlope) / norm
+    );
+}
+
+// The angle of p around the blob's center. atan(0, 0) is undefined (SPIR-V
+// leaves it so), so the center itself takes angle 0.
+float blobAngle(vec2 p) {
+    return dot(p, p) > 0.0 ? atan(p.y, p.x) : 0.0;
+}
+
+// Signed distance to a blob: the radial gap to its outline, shortened by the
+// outline's slope where the ray meets it. Exact to first order at the
+// outline and well behaved inside, where every ray keeps its own scale.
+float sdfBlob(vec2 p, vec2 h, vec4 waves0, vec4 waves1, vec4 waves2) {
+    vec2 radius = blobRadius(blobAngle(p), h, waves0, waves1, waves2);
+    float slope = radius.y / max(radius.x, 1e-4);
+    return (length(p) - radius.x) * inversesqrt(1.0 + slope * slope);
+}
+
+// The blob's outward normal where the ray through p meets its outline.
+vec2 blobNormal(vec2 p, vec2 h, vec4 waves0, vec4 waves1, vec4 waves2) {
+    float theta = blobAngle(p);
+    vec2 radius = blobRadius(theta, h, waves0, waves1, waves2);
+    vec2 radial = vec2(cos(theta), sin(theta));
+    vec2 tangent = vec2(-radial.y, radial.x);
+    return normalize(radial - tangent * (radius.y / max(radius.x, 1e-4)));
+}
+
 float getShapeSDF(
     float type,
     vec2 p,
@@ -162,6 +222,15 @@ float getShapeSDF(
     }
     if (type == 3.0) { // rounded rectangle
         return sdfRRect(p - center, size / 2.0, r);
+    }
+    if (type == 4.0) { // blob
+        return sdfBlob(
+            p - center,
+            size / 2.0,
+            rseDegreeAndSpans,
+            rseCircleCenters,
+            rseSemiAxisAndRadii
+        );
     }
     return 1e9; // none
 }
@@ -200,13 +269,19 @@ vec4 getShapeGradients(
     vec4 inverseBasis,
     float distanceScale,
     vec2 localPoint,
-    bool withExact
+    bool withExact,
+    vec4 waves0,
+    vec4 waves1,
+    vec4 waves2
 ) {
     vec2 halfSize = primitive.yz * 0.5;
     vec2 exact;
     vec2 optical;
     if (primitive.x == 2.0) {
         exact = normalize(localPoint / max(halfSize * halfSize, 1e-4));
+        optical = exact;
+    } else if (primitive.x == 4.0) {
+        exact = blobNormal(localPoint, halfSize, waves0, waves1, waves2);
         optical = exact;
     } else {
         vec2 side = vec2(
@@ -259,7 +334,7 @@ float getShapeCurvatureFactor(
     vec2 size,
     float rawRadius
 ) {
-    if (type == 2.0) { // ellipse
+    if (type == 2.0 || type == 4.0) { // ellipse, blob
         return 1.0;
     }
     vec2 halfSize = size * 0.5;
@@ -379,7 +454,8 @@ SceneSample getShapeSampleFromArray(int index, vec2 p, bool blended) {
     // deeper size response observed in the circle holdout; rounded and
     // continuous-superellipse primitives use the shallower response. Smooth
     // unions interpolate this value below.
-    resultSample.curvatureFactor = primitive.x == 2.0 ? 1.0 : 0.0;
+    resultSample.curvatureFactor =
+        primitive.x == 2.0 || primitive.x == 4.0 ? 1.0 : 0.0;
     vec2 delta = p - placement.xy;
     vec4 gradients = getShapeGradients(
         primitive,
@@ -389,7 +465,10 @@ SceneSample getShapeSampleFromArray(int index, vec2 p, bool blended) {
             inverseBasis.x * delta.x + inverseBasis.y * delta.y,
             inverseBasis.z * delta.x + inverseBasis.w * delta.y
         ),
-        blended
+        blended,
+        uRseData[index * 3],
+        uRseData[index * 3 + 1],
+        uRseData[index * 3 + 2]
     );
     resultSample.normal = gradients.xy;
     resultSample.opticalNormal = gradients.zw;
@@ -428,6 +507,138 @@ SceneSample smoothUnionSample(SceneSample a, SceneSample b, float k) {
     return result;
 }
 
+// A group's smooth union keeps only the members near its nearest one, so
+// each pixel depends on the shapes close to it and a matte can be redrawn
+// only around the shapes that changed (see FlutterGpuGeometryRenderer).
+//
+// Members are combined in widget order, as the union always was. One more
+// than kGroupFadeStart blend radii beyond the nearest member a member fades
+// out, and past kGroupReach radii it is left out. By then its distance is
+// pushed four radii beyond the nearest member's: the union of at most
+// kGroupMembers members can carry a member's influence back to the result
+// only from 3.75 radii, so leaving it out changes nothing and the union stays
+// continuous. Two-member groups keep their exact union: a second member
+// matters only within one radius.
+const float kGroupFadeStart = 1.0;
+const float kGroupReach = 2.0;
+// The nearest members of a group that are combined at one pixel; a fifth
+// member within kGroupReach radii is dropped.
+const int kGroupMembers = 4;
+
+// The distance a member enters the union with: unchanged within one blend
+// radius of the nearest member, then pushed out to four radii at
+// kGroupReach.
+float groupMemberDistance(float distance, float nearest, float k) {
+    if (k <= 0.0) return distance;
+    float t = clamp(
+        (distance - nearest - kGroupFadeStart * k) /
+            ((kGroupReach - kGroupFadeStart) * k),
+        0.0,
+        1.0
+    );
+    return distance + 2.0 * k * t * t * (3.0 - 2.0 * t);
+}
+
+void swapMembers(
+    inout SceneSample a,
+    inout float aOrder,
+    inout SceneSample b,
+    inout float bOrder
+) {
+    SceneSample held = a;
+    a = b;
+    b = held;
+    float order = aOrder;
+    aOrder = bOrder;
+    bOrder = order;
+}
+
+// Inserts a member into the ascending list s0..s3 of the nearest members,
+// dropping the farthest once kGroupMembers are kept.
+void keepNearestMember(
+    inout SceneSample s0,
+    inout float i0,
+    inout SceneSample s1,
+    inout float i1,
+    inout SceneSample s2,
+    inout float i2,
+    inout SceneSample s3,
+    inout float i3,
+    inout int count,
+    SceneSample member,
+    float index
+) {
+    int slot = count;
+    if (count >= kGroupMembers) {
+        if (member.distance >= s3.distance) return;
+        slot = kGroupMembers - 1;
+    } else {
+        count++;
+    }
+    if (slot == 0) {
+        s0 = member;
+        i0 = index;
+    } else if (slot == 1) {
+        s1 = member;
+        i1 = index;
+    } else if (slot == 2) {
+        s2 = member;
+        i2 = index;
+    } else {
+        s3 = member;
+        i3 = index;
+    }
+    if (slot >= 3 && s3.distance < s2.distance) swapMembers(s3, i3, s2, i2);
+    if (slot >= 2 && s2.distance < s1.distance) swapMembers(s2, i2, s1, i1);
+    if (slot >= 1 && s1.distance < s0.distance) swapMembers(s1, i1, s0, i0);
+}
+
+// One step of the union: a member at least the blend radius away from the
+// running union leaves it exactly as it is.
+SceneSample groupUnionStep(SceneSample running, SceneSample member, float k) {
+    if (member.distance - running.distance >= k) return running;
+    if (running.distance - member.distance >= k) return member;
+    return smoothUnionSample(running, member, k);
+}
+
+// Smooth union of the nearest members s0..s3 (ascending by distance), in
+// widget order.
+SceneSample groupUnion(
+    SceneSample s0,
+    float i0,
+    SceneSample s1,
+    float i1,
+    SceneSample s2,
+    float i2,
+    SceneSample s3,
+    float i3,
+    int count,
+    float k
+) {
+    float nearest = s0.distance;
+    float reach = kGroupReach * max(k, 0.0);
+    // Members beyond reach sort last and are skipped.
+    float o0 = i0;
+    float o1 = count > 1 && s1.distance - nearest <= reach ? i1 : 1e9;
+    float o2 = count > 2 && s2.distance - nearest <= reach ? i2 : 1e9;
+    float o3 = count > 3 && s3.distance - nearest <= reach ? i3 : 1e9;
+    int members = 1 + int(o1 < 1e9) + int(o2 < 1e9) + int(o3 < 1e9);
+    s1.distance = groupMemberDistance(s1.distance, nearest, k);
+    s2.distance = groupMemberDistance(s2.distance, nearest, k);
+    s3.distance = groupMemberDistance(s3.distance, nearest, k);
+    // Widget order: a sorting network over the four members.
+    if (o0 > o1) swapMembers(s0, o0, s1, o1);
+    if (o2 > o3) swapMembers(s2, o2, s3, o3);
+    if (o0 > o2) swapMembers(s0, o0, s2, o2);
+    if (o1 > o3) swapMembers(s1, o1, s3, o3);
+    if (o1 > o2) swapMembers(s1, o1, s2, o2);
+    SceneSample result = s0;
+    if (members > 1) result = groupUnionStep(result, s1, k);
+    if (members > 2) result = groupUnionStep(result, s2, k);
+    if (members > 3) result = groupUnionStep(result, s3, k);
+    return result;
+}
+
 SceneSample sceneSample(vec2 p, int numShapes) {
     SceneSample empty;
     empty.distance = 1e9;
@@ -441,40 +652,96 @@ SceneSample sceneSample(vec2 p, int numShapes) {
     if (numShapes == 1) {
         return getShapeSampleFromArray(0, p, false);
     }
-    
+
     SceneSample result = empty;
-    SceneSample groupResult = empty;
     int shapeCount = numShapes < MAX_SHAPES ? numShapes : MAX_SHAPES;
-    for (int i = 0; i < MAX_SHAPES; i++) {
-        if (i >= shapeCount) break;
-        float marker = uShapeData[i * 3 + 2].w;
-        bool startsGroup = marker < 0.0;
-        float groupBlend = startsGroup ? -marker - 1.0 : marker;
-        // Once a group has an exact candidate, an enclosing-box lower bound
-        // beyond its smooth-union support proves this primitive cannot affect
-        // the result. This avoids the much more expensive RSE/ellipse solve
-        // for distant shapes while retaining original evaluation order.
+    int start = 0;
+    for (int group = 0; group < MAX_SHAPES; group++) {
+        if (start >= shapeCount) break;
+        // A group runs from a negative marker up to the next one.
+        float startMarker = uShapeData[start * 3 + 2].w;
+        float k = startMarker < 0.0 ? -startMarker - 1.0 : startMarker;
+        int end = start + 1;
+        for (int i = 1; i < MAX_SHAPES; i++) {
+            if (end >= shapeCount || uShapeData[end * 3 + 2].w < 0.0) break;
+            end++;
+        }
+        bool last = end >= shapeCount;
+
+        // Start from the member whose box is nearest, so the culling below
+        // is tight from the first member on.
+        float nearestBoxSquared = 1e18;
+        int seed = start;
+        for (int i = 0; i < MAX_SHAPES; i++) {
+            int index = start + i;
+            if (index >= end) break;
+            float boxSquared = shapeBoundsDistanceSquared(
+                uShapeBounds[index],
+                p
+            );
+            if (boxSquared < nearestBoxSquared) {
+                nearestBoxSquared = boxSquared;
+                seed = index;
+            }
+        }
+        // Outside all its boxes, the union lies at most a quarter radius per
+        // further member below the nearest box. A group that cannot reach
+        // below the result cannot replace it, ties included. Inside a box
+        // nothing is proven.
+        int size = end - start;
+        float lowering = float(min(size, kGroupMembers) - 1) * 0.25 * k;
         if (
-            !startsGroup &&
-            cannotAffectGroup(
-                uShapeBounds[i],
-                p,
-                groupResult.distance + groupBlend
-            )
+            nearestBoxSquared > 0.0 &&
+            sqrt(nearestBoxSquared) - lowering > result.distance
         ) {
+            start = end;
             continue;
         }
-        SceneSample shapeValue = getShapeSampleFromArray(i, p, true);
-        if (startsGroup) {
-            result = result.distance < groupResult.distance ? result : groupResult;
-            groupResult = shapeValue;
-        } else {
-            groupResult = smoothUnionSample(
-                groupResult,
-                shapeValue,
-                groupBlend
+
+        SceneSample groupResult = getShapeSampleFromArray(seed, p, true);
+        if (size > 1) {
+            SceneSample s0 = groupResult;
+            SceneSample s1 = empty;
+            SceneSample s2 = empty;
+            SceneSample s3 = empty;
+            float i0 = float(seed);
+            float i1 = 1e9;
+            float i2 = 1e9;
+            float i3 = 1e9;
+            int count = 1;
+            float best = groupResult.distance;
+            for (int i = 0; i < MAX_SHAPES; i++) {
+                int index = start + i;
+                if (index >= end) break;
+                if (index == seed) continue;
+                // Box distance bounds the member's distance from below.
+                if (cannotAffectGroup(
+                    uShapeBounds[index],
+                    p,
+                    best + kGroupReach * k
+                )) {
+                    continue;
+                }
+                SceneSample member = getShapeSampleFromArray(index, p, true);
+                best = min(best, member.distance);
+                keepNearestMember(
+                    s0, i0, s1, i1, s2, i2, s3, i3,
+                    count,
+                    member,
+                    float(index)
+                );
+            }
+            groupResult = groupUnion(
+                s0, i0, s1, i1, s2, i2, s3, i3,
+                count,
+                k
             );
         }
+        // A later group wins ties, except the last one.
+        result = last
+            ? (result.distance <= groupResult.distance ? result : groupResult)
+            : (result.distance < groupResult.distance ? result : groupResult);
+        start = end;
     }
-    return result.distance <= groupResult.distance ? result : groupResult;
+    return result;
 }

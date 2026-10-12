@@ -57,6 +57,34 @@ uniform float uGlintVibrancy;
 uniform vec4 uSeaGlassBody;
 uniform vec4 uSeaGlassSurface;
 uniform vec4 uSeaGlassColor;
+// A blend group (see fake_glass_blend.dart): the members this surface
+// blends with, itself included, in widget order. The surface draws their
+// smooth union where it is the nearest member, so the group is drawn once.
+//   uGroup:          blend radius in layer pixels, member count (0 without a
+//                    group), this surface's slot, its distance scale
+//   uMemberFrame[i]: map from this surface's centered frame to the
+//                    member's, row by row
+//   uMemberPlace[i]: offset of that map, the member's distance scale to
+//                    layer pixels
+//   uMemberShape[i]: type, half size, corner radius
+//   uMemberRse:      the members' rounded superellipse parameters, three
+//                    each
+//   uMemberTint[i]:  surface tint
+//   uMemberBody[i]:  sea glass body color and density
+uniform vec4 uGroup;
+uniform vec4 uMemberFrame[4];
+uniform vec4 uMemberPlace[4];
+uniform vec4 uMemberShape[4];
+uniform vec4 uMemberRse[12];
+uniform vec4 uMemberTint[4];
+uniform vec4 uMemberBody[4];
+// Sea glass gloss (SeaGlassFinish.gloss) in x; yzw unused.
+uniform vec4 uSeaGlassGloss;
+
+// Tint and body color of this pixel: the surface's own, or blended toward
+// the next member's across a group's seam.
+vec4 gTint;
+vec4 gSeaGlassColor;
 
 const vec3 LUMA_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
 
@@ -96,8 +124,8 @@ vec3 seaGlassThicknessRatio(float inward) {
       0.5 * min(uSize.x, uSize.y),
       uSeaGlassBody.y
   );
-  float density = clamp(uSeaGlassColor.a, 0.0, 1.0);
-  vec3 bodyColor = clamp(uSeaGlassColor.rgb, vec3(0.02), vec3(1.0));
+  float density = clamp(gSeaGlassColor.a, 0.0, 1.0);
+  vec3 bodyColor = clamp(gSeaGlassColor.rgb, vec3(0.02), vec3(1.0));
   vec3 ratio = seaGlassWhiteFace(thickness, bodyColor, density, sizeResponse) /
       max(
         seaGlassWhiteFace(0.0, bodyColor, density, sizeResponse),
@@ -106,17 +134,38 @@ vec3 seaGlassThicknessRatio(float inward) {
   return mix(vec3(1.0), min(ratio, vec3(1.0)), clamp(uSeaGlassBody.x, 0.0, 1.0));
 }
 
+// How brightly the pebble's dome catches the light, as the final render
+// shader's seaGlassGloss computes it, in logical pixels.
+float seaGlassGlossLobe(vec3 surface, vec3 toward, float sharpness) {
+  vec3 halfway = normalize(toward + vec3(0.0, 0.0, 1.0));
+  float level = pow(halfway.z, sharpness);
+  float lobe = pow(max(dot(surface, halfway), 0.0), sharpness);
+  return max(lobe - level, 0.0) / (1.0 - level);
+}
+
+float seaGlassGloss(float inward, vec2 normal) {
+  float x = clamp(inward / max(uSeaGlassBody.y, 0.001), 0.0, 1.0);
+  vec3 surface = normalize(vec3(normal * 1.2 * (1.0 - x), 1.0));
+  vec2 lightAxis = normalize(uLightDirection + vec2(0.00001)) * 0.75;
+  vec3 toLight = normalize(vec3(-lightAxis, 0.66));
+  vec3 reflected = normalize(vec3(lightAxis, 0.66));
+  float glint = seaGlassGlossLobe(surface, toLight, 48.0);
+  float caustic = 0.35 * seaGlassGlossLobe(surface, reflected, 16.0);
+  float outline = 0.3 * (1.0 - smoothstep(0.0, 1.5 * uPixelSize, inward));
+  return glint + caustic + outline;
+}
+
 // The varying part of the sea glass face, premultiplied, to composite over
 // the face the backdrop filter and the thickness pass produced.
-vec4 seaGlassOverlay(vec2 position, float inward, float facing) {
+vec4 seaGlassOverlay(vec2 position, float inward, float facing, vec2 normal) {
   float strength = clamp(uSeaGlassBody.x, 0.0, 1.0);
   float thickness = seaGlassThickness(inward, uSeaGlassBody.y);
   vec2 sizeResponse = seaGlassSizeResponse(
       0.5 * min(uSize.x, uSize.y),
       uSeaGlassBody.y
   );
-  float density = clamp(uSeaGlassColor.a, 0.0, 1.0) * sizeResponse.x;
-  vec3 bodyColor = clamp(uSeaGlassColor.rgb, vec3(0.02), vec3(1.0));
+  float density = clamp(gSeaGlassColor.a, 0.0, 1.0) * sizeResponse.x;
+  vec3 bodyColor = clamp(gSeaGlassColor.rgb, vec3(0.02), vec3(1.0));
   vec3 pastel = mix(vec3(1.0), pow(bodyColor, vec3(0.4 * density)), 0.85);
   float rimLight = mix(0.4, 1.0, smoothstep(-1.0, 1.0, facing));
   float rimGlow = clamp(uSeaGlassBody.w, 0.0, 1.0) * (1.0 - thickness) *
@@ -140,6 +189,12 @@ vec4 seaGlassOverlay(vec2 position, float inward, float facing) {
   ) *
       clamp(uSeaGlassSurface.z, 0.0, 1.0);
   overlay = vec4(vec3(sparkle), sparkle) + overlay * (1.0 - sparkle);
+  float gloss = clamp(
+    seaGlassGloss(inward, normal) * clamp(uSeaGlassGloss.x, 0.0, 1.0),
+    0.0,
+    1.0
+  );
+  overlay = vec4(vec3(gloss), gloss) + overlay * (1.0 - gloss);
   return overlay * strength;
 }
 
@@ -155,19 +210,71 @@ float shapeDistance(vec2 p) {
   );
 }
 
-vec2 shapeNormal(vec2 p) {
-  vec2 halfSize = uSize * 0.5;
-  if (uShapeType < 0.5) {
+vec2 fakeShapeNormal(
+  float type,
+  vec2 p,
+  vec2 halfSize,
+  float cornerRadius,
+  vec4 waves0,
+  vec4 waves1,
+  vec4 waves2
+) {
+  if (type > 2.5) {
+    return fakeBlobNormal(p, halfSize, waves0, waves1, waves2);
+  }
+  if (type < 0.5) {
     vec2 radius = max(halfSize, vec2(0.001));
     return normalize(p / (radius * radius) + vec2(0.00001));
   }
-  float radius = clamp(uCornerRadius, 0.0, min(halfSize.x, halfSize.y));
+  float radius = clamp(cornerRadius, 0.0, min(halfSize.x, halfSize.y));
   vec2 q = abs(p) - halfSize + vec2(radius);
   vec2 corner = max(q, 0.0);
   if (dot(corner, corner) > 0.0001) {
     return normalize(corner) * sign(p);
   }
   return q.x > q.y ? vec2(sign(p.x), 0.0) : vec2(0.0, sign(p.y));
+}
+
+vec2 shapeNormal(vec2 p) {
+  return fakeShapeNormal(
+    uShapeType,
+    p,
+    uSize * 0.5,
+    uCornerRadius,
+    uRseDegreeAndSpans,
+    uRseCircleCenters,
+    uRseSemiAxisAndRadii
+  );
+}
+
+// Signed distance in layer pixels and outward normal, in this surface's
+// frame, of a group member at p in this surface's centered frame. The
+// member's uniforms are passed in: SkSL indexes uniform arrays only with
+// loop indices.
+float groupMemberSample(
+  vec4 frame,
+  vec4 place,
+  vec4 shape,
+  vec4 rse0,
+  vec4 rse1,
+  vec4 rse2,
+  vec2 p,
+  out vec2 normal
+) {
+  vec2 q = vec2(
+    frame.x * p.x + frame.y * p.y,
+    frame.z * p.x + frame.w * p.y
+  ) + place.xy;
+  float distance = sdFakeGlassShape(shape.x, q, shape.yz, shape.w, rse0, rse1, rse2);
+  vec2 n = fakeShapeNormal(shape.x, q, shape.yz, shape.w, rse0, rse1, rse2);
+  // Gradients map back with the transpose.
+  vec2 back = vec2(
+    frame.x * n.x + frame.z * n.y,
+    frame.y * n.x + frame.w * n.y
+  );
+  float length = max(sqrt(dot(back, back)), 1e-6);
+  normal = back / length;
+  return distance * place.z;
 }
 
 // Integral of the border ramp from the silhouette to outward distance t, all
@@ -180,6 +287,80 @@ float contourIntegral(float t, float offset, float width) {
 void main() {
   vec2 position = FlutterFragCoord().xy - uSize * 0.5;
   float distance = shapeDistance(position);
+  gTint = uTint;
+  gSeaGlassColor = uSeaGlassColor;
+  vec2 groupNormal = vec2(0.0);
+  if (uGroup.y > 0.5) {
+    // The smooth union of the group, in widget order and layer pixels, as
+    // RealGlass blends a group (smoothUnionSample in sdf.glsl). The
+    // surface draws only where it is the nearest member.
+    float blend = uGroup.x;
+    float unionDistance = 0.0;
+    vec2 unionNormal = vec2(0.0);
+    float nearest = 1e9;
+    float second = 1e9;
+    float nearestSlot = -1.0;
+    vec4 secondTint = uTint;
+    vec4 secondBody = uSeaGlassColor;
+    for (int i = 0; i < 4; i++) {
+      if (float(i) >= uGroup.y) break;
+      vec2 normal;
+      float memberDistance = groupMemberSample(
+        uMemberFrame[i],
+        uMemberPlace[i],
+        uMemberShape[i],
+        uMemberRse[3 * i],
+        uMemberRse[3 * i + 1],
+        uMemberRse[3 * i + 2],
+        position,
+        normal
+      );
+      if (i == 0) {
+        unionDistance = memberDistance;
+        unionNormal = normal;
+      } else {
+        float radius = blend * min(0.5 * length(unionNormal - normal), 1.0);
+        float e = max(radius - abs(unionDistance - memberDistance), 0.0);
+        float weight = clamp(
+          0.5 + (memberDistance - unionDistance) / (2.0 * max(radius, 1e-4)),
+          0.0,
+          1.0
+        );
+        unionDistance = min(unionDistance, memberDistance) -
+            e * e * 0.25 / max(radius, 1e-4);
+        unionNormal = mix(normal, unionNormal, weight);
+      }
+      if (memberDistance < nearest) {
+        if (nearestSlot >= 0.0) {
+          second = nearest;
+          secondTint = gTint;
+          secondBody = gSeaGlassColor;
+        }
+        nearest = memberDistance;
+        nearestSlot = float(i);
+        gTint = uMemberTint[i];
+        gSeaGlassColor = uMemberBody[i];
+      } else if (memberDistance < second) {
+        second = memberDistance;
+        secondTint = uMemberTint[i];
+        secondBody = uMemberBody[i];
+      }
+    }
+    if (abs(nearestSlot - uGroup.z) > 0.5) {
+      fragColor = vec4(0.0);
+      return;
+    }
+    // Across the seam the colors meet halfway, from either side.
+    float share = clamp(
+      0.5 + (second - nearest) / (2.0 * max(blend, 1e-4)),
+      0.5,
+      1.0
+    );
+    gTint = mix(secondTint, gTint, share);
+    gSeaGlassColor = mix(secondBody, gSeaGlassColor, share);
+    distance = unionDistance / max(uGroup.w, 1e-4);
+    groupNormal = unionNormal;
+  }
   float inward = max(-distance, 0.0);
   if (uSeaGlassSurface.w > 0.5) {
     // The thickness pass: drawn with a multiply blend, so outside the
@@ -189,7 +370,9 @@ void main() {
     return;
   }
 
-  vec2 normal = shapeNormal(position);
+  vec2 normal = uGroup.y > 0.5
+      ? normalize(groupNormal + vec2(0.00001))
+      : shapeNormal(position);
   vec2 lightDirection = normalize(uLightDirection + vec2(0.00001));
   float facing = dot(normal, -lightDirection);
 
@@ -275,7 +458,7 @@ void main() {
     1.0
   );
 
-  float tintAlpha = uTint.a;
+  float tintAlpha = gTint.a;
   // The glint pulls the lit face toward a bright target. Without backdrop
   // access FakeGlass approximates the face with the surface tint plus
   // emission and pulls toward it with source-over of an emissive target;
@@ -293,16 +476,16 @@ void main() {
   // own emission; adding that share back leaves only the transmitted light
   // shaded, as in RealGlass.
   vec3 litPremultiplied =
-      uTint.rgb * tintAlpha * (1.0 - contourAbsorption) +
+      gTint.rgb * tintAlpha * (1.0 - contourAbsorption) +
       uFaceEmission * bevelShadow * (1.0 - tintAlpha) *
           (1.0 - backdropContourAbsorption);
   float litAlpha = materialAlpha;
   if (uSeaGlassBody.x > 0.0) {
-    vec4 seaGlass = seaGlassOverlay(position, inward, facing);
+    vec4 seaGlass = seaGlassOverlay(position, inward, facing, normal);
     litPremultiplied = seaGlass.rgb + litPremultiplied * (1.0 - seaGlass.a);
     litAlpha = seaGlass.a + litAlpha * (1.0 - seaGlass.a);
   }
-  vec3 faceProxy = uTint.rgb * tintAlpha + uFaceEmission;
+  vec3 faceProxy = gTint.rgb * tintAlpha + uFaceEmission;
   vec3 glintTarget = vec3(uGlintLuminance) +
       uGlintFaceGain * faceProxy +
       uGlintVibrancy * (faceProxy - vec3(dot(faceProxy, LUMA_WEIGHTS)));

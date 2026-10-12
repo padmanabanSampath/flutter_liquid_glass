@@ -21,20 +21,23 @@ class LiquidStretch extends StatelessWidget {
     this.resistance = .08,
     this.hitTestBehavior = HitTestBehavior.opaque,
     this.gestureMode = GestureMode.listener,
+    this.wobble = false,
     super.key,
   });
 
-  /// The give of a sea glass pebble: a solid, heavier body than Apple's
-  /// gel-like glass, so it swells less when pressed, stretches about half as
-  /// far and resists the drag more.
+  /// The give of a sea glass pebble, a heavier drop than Apple's gel-like
+  /// glass: it swells a little less when pressed and resists the drag more,
+  /// yet still stretches far enough to flow into a neighbor in a
+  /// `LiquidGlassBlendGroup`. Let go, it wobbles back like a drop.
   const LiquidStretch.seaGlass({
     required this.child,
     this.hitTestBehavior = HitTestBehavior.opaque,
     this.gestureMode = GestureMode.listener,
     super.key,
-  }) : interactionScale = 1.025,
-       stretch = .22,
-       resistance = .14;
+  }) : interactionScale = 1.035,
+       stretch = .4,
+       resistance = .1,
+       wobble = true;
 
   /// The scale factor to apply when the user is interacting with the widget.
   ///
@@ -75,6 +78,12 @@ class LiquidStretch extends StatelessWidget {
   /// Defaults to [GestureMode.listener].
   final GestureMode gestureMode;
 
+  /// Whether the press swell overshoots and settles when let go, as a
+  /// drop's surface does, instead of easing back.
+  ///
+  /// Defaults to false.
+  final bool wobble;
+
   /// The child widget to apply the stretch effect to.
   final Widget child;
 
@@ -91,10 +100,16 @@ class LiquidStretch extends StatelessWidget {
         final scale = value == null ? 1.0 : interactionScale;
         return SingleMotionBuilder(
           value: scale,
-          motion: const Motion.smoothSpring(
-            duration: Duration(milliseconds: 300),
-            snapToEnd: true,
-          ),
+          motion: wobble && value == null
+              ? const Motion.bouncySpring(
+                  duration: Duration(milliseconds: 500),
+                  extraBounce: .45,
+                  snapToEnd: true,
+                )
+              : const Motion.smoothSpring(
+                  duration: Duration(milliseconds: 300),
+                  snapToEnd: true,
+                ),
           builder: (context, value, child) => Transform.scale(
             scale: value,
             child: child,

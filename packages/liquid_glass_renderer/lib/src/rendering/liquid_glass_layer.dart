@@ -684,7 +684,13 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
       ]);
     });
     // Float index 295, after the shape frames: the scattered frost radius.
-    shader.setFloat(295, _scatteredFrostRadius * devicePixelRatio);
+    shader
+      ..setFloat(295, _scatteredFrostRadius * devicePixelRatio)
+      // Float index 296, after the frost radius: the sea glass gloss.
+      ..setFloat(296, seaGlass.effectiveGloss)
+      ..setFloat(297, 0)
+      ..setFloat(298, 0)
+      ..setFloat(299, 0);
   }
 
   /// Largest frost, in device pixels, folded into the final pass instead of
@@ -1547,7 +1553,9 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
   ) {
     double extent(double x, double y) {
       switch (type) {
+        // A blob stays within the ellipse that fills its box.
         case RawShapeType.ellipse:
+        case RawShapeType.blob:
           return sqrt(
             pow(x * halfSize.width, 2) + pow(y * halfSize.height, 2),
           );
@@ -1580,6 +1588,19 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
     final determinant = axisX.dx * axisY.dy - axisY.dx * axisX.dy;
     if (determinant.abs() < 1e-8) return null;
     return (axisX: axisX, axisY: axisY, determinant: determinant);
+  }
+
+  static bool _debugWarnedShapeLimit = false;
+
+  /// Warns once that a layer had more shapes than it can draw.
+  static void _debugWarnShapeLimit(int dropped) {
+    if (!kDebugMode || _debugWarnedShapeLimit) return;
+    _debugWarnedShapeLimit = true;
+    debugPrint(
+      'liquid_glass_renderer: a LiquidGlassLayer holds at most '
+      '${LiquidGlassBlendGroup.maxShapesPerLayer} shapes; $dropped more are '
+      'not drawn. Split the glass across layers.',
+    );
   }
 
   _GpuGeometryFrame _buildGpuGeometryImage(
@@ -1627,10 +1648,15 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
       var numShapes = 0;
       var shortSide = double.infinity;
 
+      var dropped = 0;
       for (final (_, geometry, geometryToLayer) in geometries) {
         var firstInGroup = true;
         for (final shape in geometry.shapes) {
-          if (numShapes >= 16) break; // MAX_SHAPES limit
+          if (numShapes >= 16) {
+            // MAX_SHAPES limit.
+            dropped++;
+            continue;
+          }
 
           final shapeToGeometry = shape.shapeToGeometry ?? _identity;
           final basis = _matteShapeBasis(geometryToLayer, shapeToGeometry);
@@ -1678,16 +1704,21 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
           // oversized primitives), which is especially visible for stretched
           // shapes in a blend group.
           final size = shape.renderObject.size;
-          final rseParameters = roundedSuperellipseParameters(
-            size,
-            shape.rawCornerRadius,
-            scale: devicePixelRatio,
-          );
-          // The geometry shader tests each cap's angular span as
-          // 1 - cos(span); FakeGlass reads the spans themselves.
-          rseParameters[2] = 1.0 - cos(rseParameters[2]);
-          rseParameters[3] = 1.0 - cos(rseParameters[3]);
-          _rseData.addAll(rseParameters);
+          if (shape.shape case final LiquidBlob blob) {
+            // A blob's waves ride in the superellipse's slots.
+            _rseData.addAll(blob.shaderParameters);
+          } else {
+            final rseParameters = roundedSuperellipseParameters(
+              size,
+              shape.rawCornerRadius,
+              scale: devicePixelRatio,
+            );
+            // The geometry shader tests each cap's angular span as
+            // 1 - cos(span); FakeGlass reads the spans themselves.
+            rseParameters[2] = 1.0 - cos(rseParameters[2]);
+            rseParameters[3] = 1.0 - cos(rseParameters[3]);
+            _rseData.addAll(rseParameters);
+          }
           final center = centerInMatte * devicePixelRatio;
           final halfExtents = _matteHalfExtents(
             shape.rawShapeType,
@@ -1745,6 +1776,7 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
       if (numShapes == 0) {
         throw StateError('No invertible liquid-glass shapes to render.');
       }
+      if (dropped > 0) _debugWarnShapeLimit(dropped);
       if (shortSide != _materialShortSide) {
         _materialShortSide = shortSide;
         _updateShaderSettings();

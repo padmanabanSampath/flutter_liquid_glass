@@ -14,5 +14,9 @@
     "MaterialTintGradientFragment": {
         "type": "fragment",
         "file": "lib/assets/shaders/gpu/material_tint_gradient_fragment.glsl"
+    },
+    "GeometryCopyFragment": {
+        "type": "fragment",
+        "file": "lib/assets/shaders/gpu/geometry_copy_fragment.glsl"
     }
 }
