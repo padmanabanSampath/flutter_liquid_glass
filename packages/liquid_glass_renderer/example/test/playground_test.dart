@@ -11,6 +11,7 @@ import 'package:liquid_glass_renderer_example/playground/inspector/material_sect
 import 'package:liquid_glass_renderer_example/playground/playground_state.dart';
 import 'package:liquid_glass_renderer_example/playground/presets.dart';
 import 'package:liquid_glass_renderer_example/playground/scenes/draggable_glass.dart';
+import 'package:liquid_glass_renderer_example/playground/scenes/sea_glass_palette.dart';
 import 'package:liquid_glass_renderer_example/playground/scenes/sea_glass_scene.dart';
 
 void main() {
@@ -451,13 +452,37 @@ void main() {
     expect(find.text('Light Angle'), findsOneWidget);
     expect(find.text('Scattered Frost'), findsOneWidget);
 
-    // Under the sea glass style the color scene merges sea glass pebbles.
+    // Under the sea glass style the color scene is the sea glass palette:
+    // twelve pebbles and one that is alive, all in one blend group. The
+    // living pebble never settles, so pump frames instead.
     await tester.tap(find.text('Colors'));
-    await tester.pumpAndSettle();
-    expect(find.text('Cobalt'), findsOneWidget);
+    for (var frame = 0; frame < 30; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(find.byType(SeaGlassPalette), findsOneWidget);
+    for (final (label, _) in SeaGlassPalette.colors) {
+      expect(
+        find.descendant(
+          of: find.byType(SeaGlassPalette),
+          matching: find.text(label),
+        ),
+        findsOneWidget,
+      );
+    }
     expect(
       tile('Cobalt').appearance,
       const LiquidGlassAppearance.seaGlass(color: SeaGlassColors.cobalt),
+    );
+    expect(tile('Ruby').shape, isA<LiquidBlob>());
+    final alive = tile('Alive').shape;
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tile('Alive').shape, isNot(alive), reason: 'the outline flows');
+    expect(
+      find.descendant(
+        of: find.byType(LiquidGlassLayer),
+        matching: find.byType(LiquidGlass),
+      ),
+      findsNWidgets(SeaGlassPalette.colors.length + 2),
     );
     expect(tester.takeException(), isNull);
   });

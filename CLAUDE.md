@@ -93,7 +93,7 @@ The liquid glass effect works by capturing and distorting background pixels thro
 
 ### Key Components
 
-- **Shapes** (`lib/src/liquid_shape.dart`): Defines glass shape types (RoundedSuperellipse, Oval, RoundedRectangle)
+- **Shapes** (`lib/src/liquid_shape.dart`): Defines glass shape types (RoundedSuperellipse, Oval, RoundedRectangle, Blob). `LiquidBlob` (GPU type 4, FakeGlass type 3) packs its waves into the superellipse parameter slots; its radius is mirrored in Dart (`radiusAt`), `gpu/sdf.glsl` and `fake_glass_shape.glsl`, so change all three together
 - **Settings** (`lib/src/liquid_glass_settings.dart`): Configures glass appearance (refraction, frost, lighting)
 - **Sea glass** (`lib/src/sea_glass.dart`): `SeaGlassFinish` (tumbled, frosted surface on `LiquidGlassSettings.seaGlassFinish`) and the `SeaGlassColors` body palette; the tint becomes the glass body. `SeaGlassFinish.none()` (the default) must keep output byte-identical
 - **FakeGlass** (`lib/src/fake_glass.dart`): Lightweight alternative using backdrop filters instead of shaders

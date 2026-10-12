@@ -88,7 +88,59 @@ float sdRoundedSuperellipse(
     return sdSuperellipseArc(octant / max(axis, 1e-4), degree) * axis;
 }
 
-// type: 0 oval, 1 rounded rectangle, 2 rounded superellipse. Deeper than
+// A blob (LiquidBlob): the ellipse of half size h, its radius rippled by up
+// to three waves, packed as in the geometry pass's sdf.glsl (where it is
+// documented): (count1, amplitude1, phase1, count2), (amplitude2, phase2,
+// count3, amplitude3), (phase3, norm, -, -). Returns the radius at angle
+// theta and its derivative.
+vec2 fakeBlobRadius(float theta, vec2 h, vec4 waves0, vec4 waves1, vec4 waves2) {
+    float c = cos(theta);
+    float s = sin(theta);
+    vec2 axes = max(h, vec2(1e-4));
+    float a = axes.x;
+    float b = axes.y;
+    float ellipse = a * b * inversesqrt(max(b * b * c * c + a * a * s * s, 1e-12));
+    float ellipseSlope = -ellipse * ellipse * ellipse * (a * a - b * b) * s * c /
+        (a * a * b * b);
+    float x1 = waves0.x * theta + waves0.z;
+    float x2 = waves0.w * theta + waves1.y;
+    float x3 = waves1.z * theta + waves2.x;
+    float ripple = 1.0 + waves0.y * cos(x1) + waves1.x * cos(x2) +
+        waves1.w * cos(x3);
+    float rippleSlope = -waves0.y * waves0.x * sin(x1) -
+        waves1.x * waves0.w * sin(x2) - waves1.w * waves1.z * sin(x3);
+    float norm = max(waves2.y, 1e-4);
+    return vec2(
+        ellipse * ripple / norm,
+        (ellipseSlope * ripple + ellipse * rippleSlope) / norm
+    );
+}
+
+// The angle of p around the blob's center. atan(0, 0) is undefined (SPIR-V
+// leaves it so), so the center itself takes angle 0.
+float fakeBlobAngle(vec2 p) {
+    return dot(p, p) > 0.0 ? atan(p.y, p.x) : 0.0;
+}
+
+// The radial gap to the blob's outline, shortened by the outline's slope
+// where the ray meets it.
+float sdFakeBlob(vec2 p, vec2 h, vec4 waves0, vec4 waves1, vec4 waves2) {
+    vec2 radius = fakeBlobRadius(fakeBlobAngle(p), h, waves0, waves1, waves2);
+    float slope = radius.y / max(radius.x, 1e-4);
+    return (length(p) - radius.x) * inversesqrt(1.0 + slope * slope);
+}
+
+// The blob's outward normal where the ray through p meets its outline.
+vec2 fakeBlobNormal(vec2 p, vec2 h, vec4 waves0, vec4 waves1, vec4 waves2) {
+    float theta = fakeBlobAngle(p);
+    vec2 radius = fakeBlobRadius(theta, h, waves0, waves1, waves2);
+    vec2 radial = vec2(cos(theta), sin(theta));
+    vec2 tangent = vec2(-radial.y, radial.x);
+    return normalize(radial - tangent * (radius.y / max(radius.x, 1e-4)));
+}
+
+// type: 0 oval, 1 rounded rectangle, 2 rounded superellipse, 3 blob, whose
+// waves arrive in the superellipse's parameters. Deeper than
 // 6 pt inside, where only the soft bevel reads the distance, a superellipse
 // uses its rounded box (they agree to about half a point there).
 float sdFakeGlassShape(
@@ -102,6 +154,15 @@ float sdFakeGlassShape(
 ) {
     if (type < 0.5) {
         return sdEllipse(p, halfSize);
+    }
+    if (type > 2.5) {
+        return sdFakeBlob(
+            p,
+            halfSize,
+            degreeAndSpans,
+            circleCenters,
+            semiAxisAndRadii
+        );
     }
     float box = sdRoundedBox(p, halfSize, radius);
     if (type < 1.5 || box < -6.0) {

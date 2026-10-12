@@ -78,6 +78,8 @@ uniform vec4 uMemberShape[4];
 uniform vec4 uMemberRse[12];
 uniform vec4 uMemberTint[4];
 uniform vec4 uMemberBody[4];
+// Sea glass gloss (SeaGlassFinish.gloss) in x; yzw unused.
+uniform vec4 uSeaGlassGloss;
 
 // Tint and body color of this pixel: the surface's own, or blended toward
 // the next member's across a group's seam.
@@ -132,9 +134,30 @@ vec3 seaGlassThicknessRatio(float inward) {
   return mix(vec3(1.0), min(ratio, vec3(1.0)), clamp(uSeaGlassBody.x, 0.0, 1.0));
 }
 
+// How brightly the pebble's dome catches the light, as the final render
+// shader's seaGlassGloss computes it, in logical pixels.
+float seaGlassGlossLobe(vec3 surface, vec3 toward, float sharpness) {
+  vec3 halfway = normalize(toward + vec3(0.0, 0.0, 1.0));
+  float level = pow(halfway.z, sharpness);
+  float lobe = pow(max(dot(surface, halfway), 0.0), sharpness);
+  return max(lobe - level, 0.0) / (1.0 - level);
+}
+
+float seaGlassGloss(float inward, vec2 normal) {
+  float x = clamp(inward / max(uSeaGlassBody.y, 0.001), 0.0, 1.0);
+  vec3 surface = normalize(vec3(normal * 1.2 * (1.0 - x), 1.0));
+  vec2 lightAxis = normalize(uLightDirection + vec2(0.00001)) * 0.75;
+  vec3 toLight = normalize(vec3(-lightAxis, 0.66));
+  vec3 reflected = normalize(vec3(lightAxis, 0.66));
+  float glint = seaGlassGlossLobe(surface, toLight, 48.0);
+  float caustic = 0.35 * seaGlassGlossLobe(surface, reflected, 16.0);
+  float outline = 0.3 * (1.0 - smoothstep(0.0, 1.5 * uPixelSize, inward));
+  return glint + caustic + outline;
+}
+
 // The varying part of the sea glass face, premultiplied, to composite over
 // the face the backdrop filter and the thickness pass produced.
-vec4 seaGlassOverlay(vec2 position, float inward, float facing) {
+vec4 seaGlassOverlay(vec2 position, float inward, float facing, vec2 normal) {
   float strength = clamp(uSeaGlassBody.x, 0.0, 1.0);
   float thickness = seaGlassThickness(inward, uSeaGlassBody.y);
   vec2 sizeResponse = seaGlassSizeResponse(
@@ -166,6 +189,12 @@ vec4 seaGlassOverlay(vec2 position, float inward, float facing) {
   ) *
       clamp(uSeaGlassSurface.z, 0.0, 1.0);
   overlay = vec4(vec3(sparkle), sparkle) + overlay * (1.0 - sparkle);
+  float gloss = clamp(
+    seaGlassGloss(inward, normal) * clamp(uSeaGlassGloss.x, 0.0, 1.0),
+    0.0,
+    1.0
+  );
+  overlay = vec4(vec3(gloss), gloss) + overlay * (1.0 - gloss);
   return overlay * strength;
 }
 
@@ -181,7 +210,18 @@ float shapeDistance(vec2 p) {
   );
 }
 
-vec2 fakeShapeNormal(float type, vec2 p, vec2 halfSize, float cornerRadius) {
+vec2 fakeShapeNormal(
+  float type,
+  vec2 p,
+  vec2 halfSize,
+  float cornerRadius,
+  vec4 waves0,
+  vec4 waves1,
+  vec4 waves2
+) {
+  if (type > 2.5) {
+    return fakeBlobNormal(p, halfSize, waves0, waves1, waves2);
+  }
   if (type < 0.5) {
     vec2 radius = max(halfSize, vec2(0.001));
     return normalize(p / (radius * radius) + vec2(0.00001));
@@ -196,7 +236,15 @@ vec2 fakeShapeNormal(float type, vec2 p, vec2 halfSize, float cornerRadius) {
 }
 
 vec2 shapeNormal(vec2 p) {
-  return fakeShapeNormal(uShapeType, p, uSize * 0.5, uCornerRadius);
+  return fakeShapeNormal(
+    uShapeType,
+    p,
+    uSize * 0.5,
+    uCornerRadius,
+    uRseDegreeAndSpans,
+    uRseCircleCenters,
+    uRseSemiAxisAndRadii
+  );
 }
 
 // Signed distance in layer pixels and outward normal, in this surface's
@@ -218,7 +266,7 @@ float groupMemberSample(
     frame.z * p.x + frame.w * p.y
   ) + place.xy;
   float distance = sdFakeGlassShape(shape.x, q, shape.yz, shape.w, rse0, rse1, rse2);
-  vec2 n = fakeShapeNormal(shape.x, q, shape.yz, shape.w);
+  vec2 n = fakeShapeNormal(shape.x, q, shape.yz, shape.w, rse0, rse1, rse2);
   // Gradients map back with the transpose.
   vec2 back = vec2(
     frame.x * n.x + frame.z * n.y,
@@ -433,7 +481,7 @@ void main() {
           (1.0 - backdropContourAbsorption);
   float litAlpha = materialAlpha;
   if (uSeaGlassBody.x > 0.0) {
-    vec4 seaGlass = seaGlassOverlay(position, inward, facing);
+    vec4 seaGlass = seaGlassOverlay(position, inward, facing, normal);
     litPremultiplied = seaGlass.rgb + litPremultiplied * (1.0 - seaGlass.a);
     litAlpha = seaGlass.a + litAlpha * (1.0 - seaGlass.a);
   }

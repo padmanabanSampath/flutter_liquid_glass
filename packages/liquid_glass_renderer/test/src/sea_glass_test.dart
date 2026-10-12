@@ -26,13 +26,14 @@ LiquidGlassSettings _flat(SeaGlassFinish finish) => LiquidGlassSettings(
   seaGlassFinish: finish,
 );
 
-/// The body alone: no scatter, rim glow, grain, sparkle or pitting.
+/// The body alone: no scatter, rim glow, grain, sparkle, pitting or gloss.
 const _bodyOnly = SeaGlassFinish(
   scatter: 0,
   rimGlow: 0,
   grain: 0,
   sparkle: 0,
   pitting: 0,
+  gloss: 0,
 );
 
 /// One tile centered over [backdrop].
@@ -141,6 +142,7 @@ void main() {
         grainSize: 0,
         sparkle: -2,
         pitting: -5,
+        gloss: 4,
       );
       expect(finish.effectiveStrength, 1);
       expect(finish.effectiveDepth, .1);
@@ -150,6 +152,19 @@ void main() {
       expect(finish.effectiveGrainSize, .25);
       expect(finish.effectiveSparkle, 0);
       expect(finish.effectivePitting, 0);
+      expect(finish.effectiveGloss, 1);
+      expect(const SeaGlassFinish(gloss: -1).effectiveGloss, 0);
+    });
+
+    test('tumbled glass glints less than clear glass', () {
+      expect(
+        const SeaGlassFinish.frosted().gloss,
+        lessThan(const SeaGlassFinish().gloss),
+      );
+      expect(
+        const SeaGlassFinish().gloss,
+        lessThan(const SeaGlassFinish.clear().gloss),
+      );
     });
 
     test('copyWith and JSON preserve every control', () {
@@ -158,8 +173,10 @@ void main() {
         depth: 30,
         grainSize: 2.5,
         stochasticFrost: false,
+        gloss: .2,
       );
       expect(finish.stochasticFrost, isFalse);
+      expect(finish.gloss, .2);
       expect(finish.strength, .5);
       expect(finish.depth, 30);
       expect(finish.grainSize, 2.5);
@@ -191,11 +208,19 @@ void main() {
       expect(card.scatter, closeTo(1.3, 1e-9));
     });
 
-    test('the palette is opaque', () {
-      expect(SeaGlassColors.values, hasLength(11));
+    test('the palette is opaque and every color distinct', () {
+      expect(SeaGlassColors.values, hasLength(14));
+      expect(SeaGlassColors.values.toSet(), hasLength(14));
       for (final color in SeaGlassColors.values) {
         expect(color.a, 1);
       }
+      // Ruby is red; clear is nearly white; mist is a pale gray.
+      const ruby = SeaGlassColors.ruby;
+      expect(ruby.r, greaterThan(ruby.g + .3));
+      expect(SeaGlassColors.clear.computeLuminance(), greaterThan(.9));
+      const mist = SeaGlassColors.mist;
+      expect((mist.r - mist.b).abs(), lessThan(.05));
+      expect(mist.computeLuminance(), inExclusiveRange(.3, .7));
     });
   });
 
@@ -206,13 +231,17 @@ void main() {
       expect(settings.toJson().containsKey('seaGlassFinish'), isFalse);
     });
 
-    test('the sea glass preset is a flat, frosted, finished glass', () {
+    test('the sea glass preset is a domed, frosted, finished glass', () {
       final settings = LiquidGlassSettings.seaGlass();
       expect(settings.seaGlassFinish, const SeaGlassFinish());
       expect(settings.bevelShadowStrength, 0);
-      expect(settings.refractionAmount, lessThan(20));
-      // A pebble's whole face curves instead of a bevel fitted to the shape.
+      // A pebble's whole face curves, as a dome, instead of a bevel fitted
+      // to the shape.
       expect(settings.refractionFitsShape, isFalse);
+      expect(settings.refractionHeight, 100);
+      expect(settings.refractionAmount, 30);
+      expect(settings.dispersion, 0);
+      expect(LiquidGlassSettings.seaGlass(dispersion: .1).dispersion, .1);
       expect(settings.frost, greaterThan(0));
       expect(
         LiquidGlassSettings.seaGlass(
@@ -498,6 +527,35 @@ void main() {
           ),
         );
         expect(disabled, regular);
+      },
+      skip: skipProperGlassTests,
+    );
+
+    testWidgets(
+      "gloss lights the dome's shoulders and leaves the flat center",
+      (tester) async {
+        Future<List<int> Function(double, double)> render(double gloss) =>
+            _render(
+              tester,
+              _scene(
+                _flat(_bodyOnly.copyWith(gloss: gloss)),
+                const LiquidGlassAppearance.seaGlass(
+                  color: SeaGlassColors.cobalt,
+                ),
+              ),
+            );
+        final matte = await render(0);
+        final glossy = await render(1);
+        // The light is overhead: the top shoulder, a few points inside the
+        // outline, faces it.
+        expect(
+          _luminance(glossy(120, 26)),
+          greaterThan(_luminance(matte(120, 26)) + 20),
+        );
+        final center = glossy(120, 70);
+        for (final (channel, value) in matte(120, 70).indexed) {
+          expect(center[channel], closeTo(value, 1));
+        }
       },
       skip: skipProperGlassTests,
     );

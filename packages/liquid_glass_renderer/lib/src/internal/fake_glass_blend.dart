@@ -39,15 +39,23 @@ final class FakeGlassBlendMember {
       LiquidOval() => 0.0,
       LiquidRoundedRectangle() => 1.0,
       LiquidRoundedSuperellipse() => 2.0,
+      LiquidBlob() => 3.0,
     };
     radius = switch (shape) {
       LiquidOval() => 0.0,
       LiquidRoundedRectangle(:final borderRadius) => borderRadius,
       LiquidRoundedSuperellipse(:final borderRadius) => borderRadius,
+      LiquidBlob() => 0.0,
     };
-    superellipse = shape is LiquidRoundedSuperellipse
-        ? roundedSuperellipseParameters(size, radius)
-        : const [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    superellipse = switch (shape) {
+      LiquidRoundedSuperellipse() => roundedSuperellipseParameters(
+        size,
+        radius,
+      ),
+      // A blob's waves ride in the superellipse's slots.
+      final LiquidBlob blob => blob.shaderParameters,
+      _ => const [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    };
   }
 
   /// Position in widget order, which is the order of the union.
@@ -95,6 +103,14 @@ final class FakeGlassBlendMember {
 
   double _shapeDistance(Offset p) {
     final halfSize = Offset(size.width / 2, size.height / 2);
+    if (shape case final LiquidBlob blob) {
+      final (radius, slope) = blob.radiusAt(
+        math.atan2(p.dy, p.dx),
+        size / 2,
+      );
+      final ratio = slope / math.max(radius, 1e-4);
+      return (p.distance - radius) / math.sqrt(1 + ratio * ratio);
+    }
     if (type < 0.5) return _sdEllipse(p, halfSize);
     final box = _sdRoundedBox(p, halfSize, radius);
     if (type < 1.5 || box < -6) return box;
@@ -109,6 +125,13 @@ final class FakeGlassBlendMember {
 
   Offset _shapeNormal(Offset p) {
     final halfSize = Offset(size.width / 2, size.height / 2);
+    if (shape case final LiquidBlob blob) {
+      final angle = math.atan2(p.dy, p.dx);
+      final (radius, slope) = blob.radiusAt(angle, size / 2);
+      final radial = Offset(math.cos(angle), math.sin(angle));
+      final tangent = Offset(-radial.dy, radial.dx);
+      return _normalize(radial - tangent * (slope / math.max(radius, 1e-4)));
+    }
     if (type < 0.5) {
       final rx = math.max(halfSize.dx, 0.001);
       final ry = math.max(halfSize.dy, 0.001);

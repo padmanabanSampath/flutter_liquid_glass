@@ -54,7 +54,7 @@ class _SceneControl extends StatelessWidget {
   static const _hints = {
     StageScene.controls: 'Scroll the backdrop beneath the controls.',
     StageScene.blend: 'Drag the shapes into each other.',
-    StageScene.colors: 'Four appearances in one layer, blending as they merge.',
+    StageScene.colors: 'Many colors in one layer, blending as they merge.',
     StageScene.loupe: 'Drag the loupes across the backdrop.',
     StageScene.seaGlass: 'Quick settings in tumbled sea glass. Tap a tile.',
   };

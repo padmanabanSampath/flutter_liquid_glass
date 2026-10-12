@@ -137,6 +137,66 @@ float sdfEllipse(vec2 p, vec2 r) {
     return dot(p / r, p / r) > 1.0 ? distance : -distance;
 }
 
+// A blob (LiquidBlob): the ellipse of half size h, its radius rippled by up
+// to three waves. waves0..2 hold (count, amplitude, phase) of each wave in a
+// row, then the normalization that keeps the outline within the ellipse:
+// (count1, amplitude1, phase1, count2), (amplitude2, phase2, count3,
+// amplitude3), (phase3, norm, -, -). Returns the outline's radius at
+// angle theta and its derivative with respect to theta. Mirrors
+// LiquidBlob.radiusAt.
+vec2 blobRadius(
+    float theta,
+    vec2 h,
+    vec4 waves0,
+    vec4 waves1,
+    vec4 waves2
+) {
+    float c = cos(theta);
+    float s = sin(theta);
+    vec2 axes = max(h, vec2(1e-4));
+    float a = axes.x;
+    float b = axes.y;
+    float ellipse = a * b * inversesqrt(max(b * b * c * c + a * a * s * s, 1e-12));
+    float ellipseSlope = -ellipse * ellipse * ellipse * (a * a - b * b) * s * c /
+        (a * a * b * b);
+    float x1 = waves0.x * theta + waves0.z;
+    float x2 = waves0.w * theta + waves1.y;
+    float x3 = waves1.z * theta + waves2.x;
+    float ripple = 1.0 + waves0.y * cos(x1) + waves1.x * cos(x2) +
+        waves1.w * cos(x3);
+    float rippleSlope = -waves0.y * waves0.x * sin(x1) -
+        waves1.x * waves0.w * sin(x2) - waves1.w * waves1.z * sin(x3);
+    float norm = max(waves2.y, 1e-4);
+    return vec2(
+        ellipse * ripple / norm,
+        (ellipseSlope * ripple + ellipse * rippleSlope) / norm
+    );
+}
+
+// The angle of p around the blob's center. atan(0, 0) is undefined (SPIR-V
+// leaves it so), so the center itself takes angle 0.
+float blobAngle(vec2 p) {
+    return dot(p, p) > 0.0 ? atan(p.y, p.x) : 0.0;
+}
+
+// Signed distance to a blob: the radial gap to its outline, shortened by the
+// outline's slope where the ray meets it. Exact to first order at the
+// outline and well behaved inside, where every ray keeps its own scale.
+float sdfBlob(vec2 p, vec2 h, vec4 waves0, vec4 waves1, vec4 waves2) {
+    vec2 radius = blobRadius(blobAngle(p), h, waves0, waves1, waves2);
+    float slope = radius.y / max(radius.x, 1e-4);
+    return (length(p) - radius.x) * inversesqrt(1.0 + slope * slope);
+}
+
+// The blob's outward normal where the ray through p meets its outline.
+vec2 blobNormal(vec2 p, vec2 h, vec4 waves0, vec4 waves1, vec4 waves2) {
+    float theta = blobAngle(p);
+    vec2 radius = blobRadius(theta, h, waves0, waves1, waves2);
+    vec2 radial = vec2(cos(theta), sin(theta));
+    vec2 tangent = vec2(-radial.y, radial.x);
+    return normalize(radial - tangent * (radius.y / max(radius.x, 1e-4)));
+}
+
 float getShapeSDF(
     float type,
     vec2 p,
@@ -162,6 +222,15 @@ float getShapeSDF(
     }
     if (type == 3.0) { // rounded rectangle
         return sdfRRect(p - center, size / 2.0, r);
+    }
+    if (type == 4.0) { // blob
+        return sdfBlob(
+            p - center,
+            size / 2.0,
+            rseDegreeAndSpans,
+            rseCircleCenters,
+            rseSemiAxisAndRadii
+        );
     }
     return 1e9; // none
 }
@@ -200,13 +269,19 @@ vec4 getShapeGradients(
     vec4 inverseBasis,
     float distanceScale,
     vec2 localPoint,
-    bool withExact
+    bool withExact,
+    vec4 waves0,
+    vec4 waves1,
+    vec4 waves2
 ) {
     vec2 halfSize = primitive.yz * 0.5;
     vec2 exact;
     vec2 optical;
     if (primitive.x == 2.0) {
         exact = normalize(localPoint / max(halfSize * halfSize, 1e-4));
+        optical = exact;
+    } else if (primitive.x == 4.0) {
+        exact = blobNormal(localPoint, halfSize, waves0, waves1, waves2);
         optical = exact;
     } else {
         vec2 side = vec2(
@@ -259,7 +334,7 @@ float getShapeCurvatureFactor(
     vec2 size,
     float rawRadius
 ) {
-    if (type == 2.0) { // ellipse
+    if (type == 2.0 || type == 4.0) { // ellipse, blob
         return 1.0;
     }
     vec2 halfSize = size * 0.5;
@@ -379,7 +454,8 @@ SceneSample getShapeSampleFromArray(int index, vec2 p, bool blended) {
     // deeper size response observed in the circle holdout; rounded and
     // continuous-superellipse primitives use the shallower response. Smooth
     // unions interpolate this value below.
-    resultSample.curvatureFactor = primitive.x == 2.0 ? 1.0 : 0.0;
+    resultSample.curvatureFactor =
+        primitive.x == 2.0 || primitive.x == 4.0 ? 1.0 : 0.0;
     vec2 delta = p - placement.xy;
     vec4 gradients = getShapeGradients(
         primitive,
@@ -389,7 +465,10 @@ SceneSample getShapeSampleFromArray(int index, vec2 p, bool blended) {
             inverseBasis.x * delta.x + inverseBasis.y * delta.y,
             inverseBasis.z * delta.x + inverseBasis.w * delta.y
         ),
-        blended
+        blended,
+        uRseData[index * 3],
+        uRseData[index * 3 + 1],
+        uRseData[index * 3 + 2]
     );
     resultSample.normal = gradients.xy;
     resultSample.opticalNormal = gradients.zw;

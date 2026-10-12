@@ -81,6 +81,8 @@ uniform vec4 uSeaGlassShapes[32];
 // Radius in device pixels of the disc the sea glass frost scatters its
 // backdrop samples over, in place of a blur pass; 0 without.
 uniform float uSeaGlassFrostRadius;
+// Sea glass gloss (SeaGlassFinish.gloss) in x; yzw unused.
+uniform vec4 uSeaGlassGloss;
 
 vec4 colorModelSlot(int slot, int field) {
     return uColorModelParams[slot * 8 + field];
@@ -680,6 +682,35 @@ vec3 seaGlassFace(
 }
 
 
+// How brightly the pebble's dome catches the light at a pixel inwardDistance
+// inside its outline, whose outward normal is surfaceNormal.
+//
+// The dome is the thickness profile (seaGlassThickness): its surface tilts
+// from flat at full thickness to 50 degrees at the outline. A light 41
+// degrees above the surface, along uLightDirection, glints off the shoulder
+// facing it; its reflection inside the glass lights the far wall more
+// softly; and the outline, where the surface turns away, catches a line of
+// light about a pixel and a half wide. A flat face reflects neither lobe,
+// so the body color at the center stays untouched.
+float seaGlassGlossLobe(vec3 normal, vec3 toward, float sharpness) {
+    vec3 halfway = normalize(toward + vec3(0.0, 0.0, 1.0));
+    float level = pow(halfway.z, sharpness);
+    float lobe = pow(max(dot(normal, halfway), 0.0), sharpness);
+    return max(lobe - level, 0.0) / (1.0 - level);
+}
+
+float seaGlassGloss(float inwardDistance, vec2 surfaceNormal) {
+    float x = clamp(inwardDistance / uSeaGlassDepth, 0.0, 1.0);
+    vec3 normal = normalize(vec3(surfaceNormal * 1.2 * (1.0 - x), 1.0));
+    vec2 lightAxis = uLightDirection * 0.75;
+    vec3 toLight = normalize(vec3(-lightAxis, 0.66));
+    vec3 reflected = normalize(vec3(lightAxis, 0.66));
+    float glint = seaGlassGlossLobe(normal, toLight, 48.0);
+    float caustic = 0.35 * seaGlassGlossLobe(normal, reflected, 16.0);
+    float outline = 0.3 * (1.0 - smoothstep(0.0, 1.5, inwardDistance));
+    return glint + caustic + outline;
+}
+
 void main() {
     // Map image-filter fragment coordinates back into the layer-local geometry
     // matte. Apple Metal surfaces expose global filter coordinates, while
@@ -1211,6 +1242,17 @@ void main() {
             litColor,
             vec3(kSeaGlassSparkleLuminance),
             clamp(sparkle, 0.0, 1.0)
+        );
+    }
+    if (uSeaGlassStrength > 0.0 && uSeaGlassGloss.x > 0.0) {
+        float gloss = seaGlassGloss(
+            max(signedEdgeDistance, 0.0),
+            surfaceNormal
+        ) * uSeaGlassGloss.x * uSeaGlassStrength;
+        litColor = mix(
+            litColor,
+            vec3(kSeaGlassSparkleLuminance),
+            clamp(gloss, 0.0, 1.0)
         );
     }
     // The lit material (face, tint, saturation, lighting and in-material

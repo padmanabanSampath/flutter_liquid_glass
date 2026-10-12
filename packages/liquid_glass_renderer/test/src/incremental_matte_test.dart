@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'package:liquid_glass_renderer/src/internal/flutter_gpu_geometry_renderer.dart';
 
 const _expectFallback = bool.fromEnvironment('EXPECT_FLUTTER_GPU_FALLBACK');
@@ -19,7 +20,19 @@ class _Shape {
     this.radius = 0,
     this.scaleX = 1,
     this.scaleY = 1,
+    this.rse = const [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   });
+
+  /// A living blob at [time].
+  _Shape.alive(double x, double y, double time)
+    : this(
+        4,
+        x,
+        y,
+        120,
+        110,
+        rse: LiquidBlob.alive(time: time).shaderParameters,
+      );
 
   final double type;
   final double x;
@@ -30,6 +43,9 @@ class _Shape {
   final double scaleX;
   final double scaleY;
 
+  /// The superellipse slots, which carry a blob's waves.
+  final List<double> rse;
+
   _Shape moved(double dx, double dy) => _Shape(
     type,
     x + dx,
@@ -39,6 +55,7 @@ class _Shape {
     radius: radius,
     scaleX: scaleX,
     scaleY: scaleY,
+    rse: rse,
   );
 
   _Shape stretched(double sx, double sy) => _Shape(
@@ -50,6 +67,7 @@ class _Shape {
     radius: radius,
     scaleX: sx,
     scaleY: sy,
+    rse: rse,
   );
 }
 
@@ -86,6 +104,7 @@ void main() {
           ],
         ],
         numShapes: scene.length,
+        rseData: [for (final (shape, _) in scene) ...shape.rse],
         boundsData: [
           for (final (shape, _) in scene) ...[
             shape.x - shape.width / 2 * shape.scaleX,
@@ -216,6 +235,21 @@ void main() {
       scene[0] = (scene[0].$1.moved(4, 9), scene[0].$2);
       scene[10] = (scene[10].$1.moved(20, -40), scene[10].$2);
       await expectSameAsFullRender(renderer, scene);
+    });
+
+    test('a living blob redraws only around itself', () async {
+      final renderer = await FlutterGpuGeometryRenderer.fromAsset(_bundle);
+      addTearDown(renderer.dispose);
+      // Close enough to the group that its reach overlaps a tile.
+      _Scene at(double time) => [
+        ...base.take(9),
+        (_Shape.alive(560, 300, time), -1.0),
+      ];
+      render(renderer, at(0));
+      for (final time in [0.25, 0.5, 1.5]) {
+        await expectSameAsFullRender(renderer, at(time));
+        expect(renderer.debugLastRedrawnPixels, lessThan(640 * 480 * 0.2));
+      }
     });
 
     test('a sequence of drags matches full renders frame by frame', () async {

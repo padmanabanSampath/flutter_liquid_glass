@@ -153,11 +153,13 @@ void paintFakeGlassSurface(
     LiquidOval() => 0.0,
     LiquidRoundedRectangle() => 1.0,
     LiquidRoundedSuperellipse() => 2.0,
+    LiquidBlob() => 3.0,
   };
   final cornerRadius = switch (shape) {
     LiquidOval() => 0.0,
     LiquidRoundedRectangle(:final borderRadius) => borderRadius,
     LiquidRoundedSuperellipse(:final borderRadius) => borderRadius,
+    LiquidBlob() => 0.0,
   };
   final opticalThickness = settings.effectiveEdgeDistanceRange;
   // The engine copies a fragment shader's uniforms when a draw records it,
@@ -200,9 +202,15 @@ void paintFakeGlassSurface(
             faceEmission.b * appearanceVisibility,
           ])
           ..setFloats(
-            shape is LiquidRoundedSuperellipse
-                ? roundedSuperellipseParameters(size, cornerRadius)
-                : _noSuperellipse,
+            switch (shape) {
+              LiquidRoundedSuperellipse() => roundedSuperellipseParameters(
+                size,
+                cornerRadius,
+              ),
+              // A blob's waves ride in the superellipse's slots.
+              LiquidBlob() => shape.shaderParameters,
+              _ => _noSuperellipse,
+            },
           )
           ..setFloat(appearance.colorModel.fakeGlintFaceGain)
           ..setFloat(appearance.colorModel.fakeGlintVibrancy)
@@ -220,7 +228,8 @@ void paintFakeGlassSurface(
             appearance.tint.b,
             appearance.tint.a,
           ])
-          ..setFloats(_groupUniforms(group, settings));
+          ..setFloats(_groupUniforms(group, settings))
+          ..setFloats([seaGlass.effectiveGloss, 0, 0, 0]);
       });
   final contourOutset = fakeGlassSurfaceOutset(settings);
   // A member also draws its half of the bridges, which reach up to half the

@@ -42,6 +42,21 @@
   into a neighbor in a blend group and wobbles back when let go (the new
   `LiquidStretch.wobble`). In the example, the sea glass quick settings
   tiles and accent pebbles merge and pinch off like drops.
+- **Organic shapes.** `LiquidBlob` is an ellipse rippled by up to three
+  `LiquidWave`s: `LiquidBlob.pebble` gives a tumbled, irregular pebble and
+  `LiquidBlob.cookie` a scalloped one. It renders, blends and works in
+  FakeGlass like the other shapes.
+- **Living glass.** `LiquidBlob.alive(time: ...)` flows and breathes as
+  `time` advances; drive it from a ticker. In the example, the sea glass
+  palette has a living pebble.
+- **Dome lens.** The `seaGlass` preset's lens is a 100 pt dome
+  (`refractionHeight: 100`, `refractionAmount: 30`), so pebbles bow the
+  backdrop like a magnifying glass; it takes a `dispersion` for rainbow
+  edges on clear glass.
+- **Gloss.** `SeaGlassFinish.gloss` lights the dome: a curved glint on the
+  shoulder facing the light, a softer one on the far wall and a thin bright
+  line along the outline, following `lightAngle`. Real glass and FakeGlass.
+- **More colors.** `SeaGlassColors.ruby`, `clear` and `mist`.
 
 ### Performance
 

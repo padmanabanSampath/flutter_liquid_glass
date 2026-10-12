@@ -376,7 +376,8 @@ enum RawShapeType {
   // none(0), unused in CPU code
   squircle(1),
   ellipse(2),
-  roundedRectangle(3);
+  roundedRectangle(3),
+  blob(4);
 
   const RawShapeType(this.shaderIndex);
 
@@ -390,6 +391,8 @@ enum RawShapeType {
         return RawShapeType.ellipse;
       case LiquidRoundedRectangle():
         return RawShapeType.roundedRectangle;
+      case LiquidBlob():
+        return RawShapeType.blob;
     }
   }
 }
@@ -417,6 +420,8 @@ class ShapeGeometry extends Equatable {
       case LiquidRoundedRectangle():
         return shape.borderRadius;
       case LiquidOval():
+        return 0;
+      case LiquidBlob():
         return 0;
     }
   }

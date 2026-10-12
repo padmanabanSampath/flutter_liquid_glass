@@ -40,6 +40,7 @@ class SeaGlassFinish with Equatable {
     this.sparkle = 0.35,
     this.pitting = 0.6,
     this.stochasticFrost = true,
+    this.gloss = 0.6,
   });
 
   /// No sea glass: the regular liquid-glass face.
@@ -52,7 +53,8 @@ class SeaGlassFinish with Equatable {
       grainSize = 1.4,
       sparkle = 0.35,
       pitting = 0.6,
-      stochasticFrost = true;
+      stochasticFrost = true,
+      gloss = 0.6;
 
   /// A heavily tumbled, milkier pebble: more scatter, coarser grain and a
   /// brighter rim. Pair it with a larger [LiquidGlassSettings.frost].
@@ -65,7 +67,8 @@ class SeaGlassFinish with Equatable {
       grainSize = 1.8,
       sparkle = 0.45,
       pitting = 1.6,
-      stochasticFrost = true;
+      stochasticFrost = true,
+      gloss = 0.35;
 
   /// A barely tumbled shard that is still mostly clear.
   const SeaGlassFinish.clear()
@@ -77,7 +80,8 @@ class SeaGlassFinish with Equatable {
       grainSize = 1.2,
       sparkle = 0.2,
       pitting = 0.4,
-      stochasticFrost = true;
+      stochasticFrost = true,
+      gloss = 0.85;
 
   /// Restores a finish produced by [toJson].
   factory SeaGlassFinish.fromJson(Object? json) {
@@ -96,6 +100,7 @@ class SeaGlassFinish with Equatable {
       pitting: number('pitting', defaults.pitting),
       stochasticFrost:
           json['stochasticFrost'] as bool? ?? defaults.stochasticFrost,
+      gloss: number('gloss', defaults.gloss),
     );
   }
 
@@ -153,6 +158,16 @@ class SeaGlassFinish with Equatable {
   /// Gaussian frost, or for a very heavy frost over a large area.
   final bool stochasticFrost;
 
+  /// How brightly the pebble's rounded surface catches the light.
+  ///
+  /// A pebble is a low dome: its surface tilts toward the outline. A light
+  /// high above glints off the shoulder facing it in a curved highlight, its
+  /// reflection inside the glass lights the far wall more softly, and the
+  /// outline, where the surface turns away, shows a thin bright line. The
+  /// glints follow [LiquidGlassSettings.lightAngle]. `0` turns them off;
+  /// tumbled, frostier glass glints less.
+  final double gloss;
+
   /// [strength] clamped to `0` to `1`.
   double get effectiveStrength => strength.clamp(0.0, 1.0);
 
@@ -177,6 +192,9 @@ class SeaGlassFinish with Equatable {
   /// [sparkle] clamped to `0` to `1`.
   double get effectiveSparkle => sparkle.clamp(0.0, 1.0);
 
+  /// [gloss] clamped to `0` to `1`.
+  double get effectiveGloss => gloss.clamp(0.0, 1.0);
+
   /// [pitting]; never negative.
   double get effectivePitting => math.max(0, pitting);
 
@@ -195,6 +213,7 @@ class SeaGlassFinish with Equatable {
     double? sparkle,
     double? pitting,
     bool? stochasticFrost,
+    double? gloss,
   }) => SeaGlassFinish(
     strength: strength ?? this.strength,
     depth: depth ?? this.depth,
@@ -205,6 +224,7 @@ class SeaGlassFinish with Equatable {
     sparkle: sparkle ?? this.sparkle,
     pitting: pitting ?? this.pitting,
     stochasticFrost: stochasticFrost ?? this.stochasticFrost,
+    gloss: gloss ?? this.gloss,
   );
 
   /// A soft shadow tinted by the glass, as colored glass casts on a light
@@ -249,6 +269,7 @@ class SeaGlassFinish with Equatable {
     'sparkle': sparkle,
     'pitting': pitting,
     'stochasticFrost': stochasticFrost,
+    'gloss': gloss,
   };
 
   @override
@@ -262,6 +283,7 @@ class SeaGlassFinish with Equatable {
     sparkle,
     pitting,
     stochasticFrost,
+    gloss,
   ];
 }
 
@@ -309,7 +331,7 @@ abstract final class SeaGlassColors {
   /// Honey amber.
   static const Color amber = Color(0xFFF2AE43);
 
-  /// Bottle brown.
+  /// Bottle brown, the root beer of beach glass.
   static const Color brown = Color(0xFF94502A);
 
   /// Deep blue-green teal.
@@ -317,6 +339,15 @@ abstract final class SeaGlassColors {
 
   /// Faintly green white glass.
   static const Color white = Color(0xFFE9F0EC);
+
+  /// Deep red ruby, from rare gold-tinted glass.
+  static const Color ruby = Color(0xFFC8444A);
+
+  /// Clear, almost colorless glass with the faintest cool cast.
+  static const Color clear = Color(0xFFF4F8F7);
+
+  /// Soft gray mist, smoky glass weathered pale.
+  static const Color mist = Color(0xFFB9C4C2);
 
   /// All colors, in the order above.
   static const List<Color> values = [
@@ -331,5 +362,8 @@ abstract final class SeaGlassColors {
     brown,
     teal,
     white,
+    ruby,
+    clear,
+    mist,
   ];
 }
