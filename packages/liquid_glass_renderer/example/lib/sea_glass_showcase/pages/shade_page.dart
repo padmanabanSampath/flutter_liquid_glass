@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:liquid_glass_renderer_example/sea_glass_showcase/pages/common.dart';
 import 'package:liquid_glass_renderer_example/sea_glass_showcase/quick_settings.dart';
+import 'package:liquid_glass_renderer_example/sea_glass_showcase/showcase_options.dart';
 import 'package:liquid_glass_renderer_example/sea_glass_showcase/showcase_style.dart';
 
 /// The notification shade: a clock over quick settings tiles. The
@@ -18,6 +19,20 @@ class ShadePage extends StatefulWidget {
 class _ShadePageState extends State<ShadePage>
     with AutomaticKeepAliveClientMixin {
   final _active = <String>{'Wi-Fi', 'Location'};
+
+  /// The slab glass role of each tile while it is on.
+  static const _tileRoles = {
+    'Wi-Fi': SlabRole.primary,
+    'Mobile data': SlabRole.tertiary,
+    'Bluetooth': SlabRole.secondary,
+    'Torch': SlabRole.action,
+    'Location': SlabRole.positive,
+    'Modes': SlabRole.secondary,
+    'Screen record': SlabRole.action,
+    'Airplane mode': SlabRole.tertiary,
+    'Scan QR code': SlabRole.positive,
+    'Quick Share': SlabRole.primary,
+  };
 
   @override
   bool get wantKeepAlive => true;
@@ -49,7 +64,10 @@ class _ShadePageState extends State<ShadePage>
                     const SizedBox(height: 32),
                     ShowcaseLayer(
                       child: QuickSettingsPanel(
-                        body: style.body,
+                        body: style.roleBody(SlabRole.primary),
+                        tileBody: (label) => style.roleBody(
+                          _tileRoles[label] ?? SlabRole.tertiary,
+                        ),
                         active: _active,
                         onToggle: (label) => setState(() {
                           if (!_active.remove(label)) _active.add(label);

@@ -101,7 +101,9 @@ class _WeatherPageState extends State<WeatherPage>
                         label: _hours[i].$1,
                         icon: _hours[i].$2,
                         temperature: _hours[i].$3,
-                        body: i == _hour ? style.body : null,
+                        body: i == _hour
+                            ? style.roleBody(SlabRole.tertiary)
+                            : null,
                         onTap: () => setState(() => _hour = i),
                       ),
                     ),
@@ -253,7 +255,7 @@ class _SunAndCloudState extends State<_SunAndCloud>
         appearance: const LiquidGlassAppearance.seaGlass(
           color: Color(0x99F4F8F6),
         ),
-        shadows: SeaGlassFinish.shadows(frostedWhite, elevation: 4),
+        shadows: showcaseShadows(context, frostedWhite, elevation: 4),
         child: const SizedBox.expand(),
       ),
     );

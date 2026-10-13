@@ -62,7 +62,9 @@ class _HomePageState extends State<HomePage>
                         if (i > 0) const SizedBox(width: 8),
                         _Chip(
                           label: _rooms[i],
-                          body: i == _room ? style.body : null,
+                          body: i == _room
+                              ? style.roleBody(SlabRole.positive)
+                              : null,
                           onTap: () => setState(() => _room = i),
                         ),
                       ],
@@ -94,7 +96,9 @@ class _HomePageState extends State<HomePage>
                       child: _Scene(
                         icon: _scenes[i].$1,
                         label: _scenes[i].$2,
-                        body: i == _scene ? style.body : null,
+                        body: i == _scene
+                            ? style.roleBody(SlabRole.secondary)
+                            : null,
                         onTap: () => setState(() => _scene = i),
                       ),
                     ),
@@ -115,7 +119,7 @@ class _HomePageState extends State<HomePage>
                           name: _devices[row * 2 + column].$2,
                           status: _devices[row * 2 + column].$3,
                           body: _on.contains(row * 2 + column)
-                              ? style.body
+                              ? style.roleBody(SlabRole.tertiary)
                               : null,
                           onTap: () => setState(() {
                             final index = row * 2 + column;
@@ -245,7 +249,11 @@ class _Thermostat extends StatelessWidget {
                   ),
                   child: LiquidGlass.grouped(
                     shape: const LiquidOval(),
-                    shadows: SeaGlassFinish.shadows(frostedWhite, elevation: 8),
+                    shadows: showcaseShadows(
+                      context,
+                      frostedWhite,
+                      elevation: 8,
+                    ),
                     child: CustomPaint(
                       painter: _DialPainter(
                         progress: progress,
@@ -311,7 +319,7 @@ class _Thermostat extends StatelessWidget {
                 label: 'Warmer',
                 size: _button,
                 grouped: true,
-                body: style.body,
+                body: style.roleBody(SlabRole.action),
                 onTap: () => _step(.5),
               ),
             ),

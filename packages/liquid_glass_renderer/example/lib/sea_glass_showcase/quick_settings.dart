@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'package:liquid_glass_renderer_example/sea_glass_showcase/showcase_options.dart';
+import 'package:liquid_glass_renderer_example/sea_glass_showcase/showcase_style.dart';
 
 /// A quick settings panel in sea glass: frosted tiles that turn to colored
 /// glass when switched on, and a brightness slider in the body color.
@@ -20,11 +21,16 @@ class QuickSettingsPanel extends StatelessWidget {
     required this.brightness,
     required this.onBrightness,
     required this.darkWallpaper,
+    this.tileBody,
     super.key,
   });
 
-  /// The sea glass body of switched-on tiles.
+  /// The sea glass body of the brightness level, and of switched-on
+  /// tiles without [tileBody].
   final Color body;
+
+  /// The body of each switched-on tile by its label; [body] by default.
+  final Color Function(String label)? tileBody;
   final Set<String> active;
   final ValueChanged<String> onToggle;
   final double brightness;
@@ -47,7 +53,7 @@ class QuickSettingsPanel extends StatelessWidget {
     label: label,
     detail: detail,
     compact: compact,
-    body: active.contains(label) ? body : null,
+    body: active.contains(label) ? (tileBody?.call(label) ?? body) : null,
     darkWallpaper: darkWallpaper,
     onTap: () => onToggle(label),
   );
@@ -161,7 +167,8 @@ class _Tile extends StatelessWidget {
               borderRadius: QuickSettingsPanel.tileHeight / 2,
             ),
             appearance: on ? LiquidGlassAppearance.seaGlass(color: body) : null,
-            shadows: SeaGlassFinish.shadows(
+            shadows: showcaseShadows(
+              context,
               on ? body : frostedWhite,
               elevation: on ? 5 : 3,
             ),
@@ -324,7 +331,7 @@ class _BrightnessSlider extends StatelessWidget {
                         borderRadius: _height / 2,
                       ),
                       appearance: LiquidGlassAppearance.seaGlass(color: body),
-                      shadows: SeaGlassFinish.shadows(body, elevation: 5),
+                      shadows: showcaseShadows(context, body, elevation: 5),
                       child: const SizedBox.expand(),
                     ),
                   ),
@@ -351,7 +358,8 @@ class _BrightnessSlider extends StatelessWidget {
                       shape: const LiquidRoundedSuperellipse(
                         borderRadius: _height / 2,
                       ),
-                      shadows: SeaGlassFinish.shadows(
+                      shadows: showcaseShadows(
+                        context,
                         frostedWhite,
                         elevation: 3,
                       ),

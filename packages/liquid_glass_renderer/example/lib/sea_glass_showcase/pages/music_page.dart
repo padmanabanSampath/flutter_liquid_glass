@@ -5,6 +5,7 @@ import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'package:liquid_glass_renderer_example/sea_glass_showcase/pages/common.dart';
+import 'package:liquid_glass_renderer_example/sea_glass_showcase/showcase_options.dart';
 import 'package:liquid_glass_renderer_example/sea_glass_showcase/showcase_style.dart';
 
 /// Now playing: frosted controls lying across the lower edge of the album
@@ -100,7 +101,9 @@ class _MusicPageState extends State<MusicPage>
                               label: 'Shuffle',
                               size: 46,
                               grouped: true,
-                              body: _shuffle ? style.body : null,
+                              body: _shuffle
+                                  ? style.roleBody(SlabRole.positive)
+                                  : null,
                               onTap: () => setState(() => _shuffle = !_shuffle),
                             ),
                             const SizedBox(width: 12),
@@ -119,7 +122,7 @@ class _MusicPageState extends State<MusicPage>
                               label: _playing ? 'Pause' : 'Play',
                               size: 88,
                               grouped: true,
-                              body: style.body,
+                              body: style.roleBody(SlabRole.primary),
                               onTap: () => setState(() => _playing = !_playing),
                             ),
                             const SizedBox(width: 12),
@@ -136,7 +139,9 @@ class _MusicPageState extends State<MusicPage>
                               label: 'Repeat',
                               size: 46,
                               grouped: true,
-                              body: _repeat ? style.body : null,
+                              body: _repeat
+                                  ? style.roleBody(SlabRole.positive)
+                                  : null,
                               onTap: () => setState(() => _repeat = !_repeat),
                             ),
                           ],

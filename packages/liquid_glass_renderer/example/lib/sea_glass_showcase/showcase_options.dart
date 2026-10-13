@@ -28,9 +28,14 @@ const frostedWhite = Color(0x59E9F0EC);
 /// glass, the thick, milky pastel slabs of the Sea Glass design concept
 /// (LiquidGlassSettings.slabSeaGlass), flecked like terrazzo, glowing on
 /// the side away from the light and casting soft shadows.
+///
+/// Clear slab is the same pastel slab glass made translucent: it scatters
+/// little and its lens is wider, so it shows and bends what is beneath, as
+/// our sea glass does, while keeping the slab's glow and grain.
 enum ShowcaseMaterial {
   seaGlass('Sea glass'),
-  slab('Slab glass');
+  slab('Slab'),
+  clearSlab('Clear slab');
 
   const ShowcaseMaterial(this.label);
 
@@ -38,18 +43,28 @@ enum ShowcaseMaterial {
 
   /// The frosted glass of switched-off tiles and panels: frosted white sea
   /// glass, or the milky clear slab of the concept.
-  Color get frost => this == seaGlass ? frostedWhite : _slabClear;
+  Color get frost => switch (this) {
+    seaGlass => frostedWhite,
+    slab => _slabClear,
+    clearSlab => _clearSlabClear,
+  };
+
+  /// Whether this is one of the slab glasses.
+  bool get isSlab => this != seaGlass;
+
+  /// The glass after this one, for the quick toggle.
+  ShowcaseMaterial get next => values[(index + 1) % values.length];
 
   /// [color] as this glass shows it: as it is for sea glass; for slab
   /// glass, the concept's clean pastel of the same hue, light and with
   /// enough color to read as candy rather than grey. Near-colorless glass
   /// stays near-colorless.
   Color tint(Color color) {
-    if (this == seaGlass) return color;
+    if (!isSlab) return color;
     final hsl = HSLColor.fromColor(color.withValues(alpha: 1));
     final saturation = hsl.saturation < .12
         ? hsl.saturation
-        : math.max(hsl.saturation * .9, .55);
+        : math.max(hsl.saturation, .72);
     return hsl
         .withSaturation(saturation.clamp(0.0, 1.0))
         .withLightness(.8)
@@ -58,19 +73,48 @@ enum ShowcaseMaterial {
 
   /// How much of the showcase's transparency this glass takes: slab glass
   /// is milky by nature, so it clears only a little.
-  double get clarityShare => this == seaGlass ? 1 : .3;
+  double get clarityShare => this == slab ? .3 : 1;
 
   static const _slabClear = Color(0xFFEDEFF0);
+  static const _clearSlabClear = Color(0x66EDEFF0);
 }
 
-/// The slab finish the showcase uses: chips of terrazzo large enough to
-/// read, a soft shadow that starts at the slab's edge, and outlines whose
-/// hand-cut undulations show.
+/// The slab finish the showcase uses, after the concept's sheet: an
+/// almost smooth face with only a fine, sugary grain, a soft shadow that
+/// starts at the slab's edge, and outlines whose hand-cut undulations show.
 final slabFinish = const SeaGlassFinish.slab().copyWith(
-  grainSize: 2.4,
+  flecks: .35,
   elevation: 22,
   wobble: 2.5,
 );
+
+/// The part a component plays, which picks its slab glass color: each
+/// component of the concept's sheet has its own (see SlabSeaGlass).
+enum SlabRole {
+  /// Prompt bars and primary controls: periwinkle.
+  primary,
+
+  /// Toolbars, tab bars and scenes: orchid.
+  secondary,
+
+  /// Active devices, hours and levels: aqua.
+  tertiary,
+
+  /// Selected chips and toggles: mint.
+  positive,
+
+  /// The main action: coral.
+  action;
+
+  /// This role's color in [set].
+  Color of(SlabSeaGlass set) => switch (this) {
+    primary => set.primary,
+    secondary => set.secondary,
+    tertiary => set.tertiary,
+    positive => set.positive,
+    action => set.error,
+  };
+}
 
 /// How tumbled the glass is.
 ///
@@ -141,12 +185,13 @@ enum ShowcaseFinish {
     ShowcaseShine shine = ShowcaseShine.satin,
     double lightAngle = 0,
     double clarity = 0,
+    double extraFrost = 0,
   }) => LiquidGlassSettings.seaGlass(
     finish: finish.copyWith(
       gloss: shine.gloss(finish),
       colorClarity: clarity,
     ),
-    frost: frost,
+    frost: frost + extraFrost,
     refractionHeight: 36,
     refractionAmount: 16,
   ).copyWith(lightAngle: lightAngle);
@@ -250,6 +295,10 @@ enum ShowcaseTone {
 /// How clear colored glass is by default: clear enough to show and bend
 /// what is beneath it, with its color kept.
 const defaultClarity = .5;
+
+/// The blur, in logical pixels, the Frost slider adds at its top: enough
+/// to soften a photo behind white glass into color, as frosted glass does.
+const maxExtraFrost = 9.0;
 
 /// The color strength that leaves sea glass colors as sampled.
 const defaultColorStrength = .6;

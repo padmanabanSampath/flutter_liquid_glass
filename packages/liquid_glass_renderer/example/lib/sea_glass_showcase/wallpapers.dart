@@ -32,12 +32,19 @@ class WallpaperGlow {
 ///
 /// Soft color fields elevate the glass instead of competing with it: the
 /// frost picks up their glows, and each one flatters a different family of
-/// sea glass colors. Sea Mist follows the selected glass color. Bloom is an
+/// sea glass colors. Sea Mist follows the selected glass color. Paper is
+/// the pale room of the Sea Glass design concept, where slab glass reads
+/// as on its sheet. Bloom is an
 /// original wallpaper in the style of iOS's bold ribbon wallpapers. The
 /// photos come from the playground, for comparison with a busy backdrop; add
 /// your own image to `assets/backdrops/` and list it here to use it.
 enum ShowcaseWallpaper {
   seaMist('Sea Mist'),
+  paper(
+    'Paper',
+    top: Color(0xFFFBFBFE),
+    bottom: Color(0xFFF1EEF8),
+  ),
   lagoon(
     'Lagoon',
     top: Color(0xFFE3F6F1),

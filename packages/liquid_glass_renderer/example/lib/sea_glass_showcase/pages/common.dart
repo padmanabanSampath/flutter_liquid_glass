@@ -140,7 +140,8 @@ class GlassCard extends StatelessWidget {
     final appearance = body == null
         ? null
         : LiquidGlassAppearance.seaGlass(color: body);
-    final shadows = SeaGlassFinish.shadows(
+    final shadows = showcaseShadows(
+      context,
       body ?? frostedWhite,
       elevation: elevation,
     );
@@ -196,7 +197,8 @@ class GlassPebble extends StatelessWidget {
     final appearance = body == null
         ? null
         : LiquidGlassAppearance.seaGlass(color: body);
-    final shadows = SeaGlassFinish.shadows(
+    final shadows = showcaseShadows(
+      context,
       body ?? frostedWhite,
       elevation: size > 64 ? 7 : 4,
     );
@@ -252,7 +254,7 @@ class GlassSlider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = ShowcaseScope.of(context);
-    final body = style.body;
+    final body = style.roleBody(SlabRole.tertiary);
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -282,7 +284,7 @@ class GlassSlider extends StatelessWidget {
                         borderRadius: height / 2,
                       ),
                       appearance: LiquidGlassAppearance.seaGlass(color: body),
-                      shadows: SeaGlassFinish.shadows(body, elevation: 4),
+                      shadows: showcaseShadows(context, body, elevation: 4),
                       child: const SizedBox.expand(),
                     ),
                   ),
@@ -309,7 +311,8 @@ class GlassSlider extends StatelessWidget {
                       shape: LiquidRoundedSuperellipse(
                         borderRadius: height / 2,
                       ),
-                      shadows: SeaGlassFinish.shadows(
+                      shadows: showcaseShadows(
+                        context,
                         frostedWhite,
                         elevation: 3,
                       ),

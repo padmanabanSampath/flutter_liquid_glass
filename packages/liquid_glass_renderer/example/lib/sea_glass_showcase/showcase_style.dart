@@ -19,6 +19,8 @@ class ShowcaseStyle {
     this.clarity = defaultClarity,
     this.colorStrength = defaultColorStrength,
     this.material = ShowcaseMaterial.seaGlass,
+    this.shadows = true,
+    this.frosting = 0,
   });
 
   /// Index into [seaGlassPalette]; teal by default.
@@ -50,6 +52,14 @@ class ShowcaseStyle {
   /// Which glass every page is made of.
   final ShowcaseMaterial material;
 
+  /// Whether the glass casts shadows.
+  final bool shadows;
+
+  /// How frosted the glass is, from `0` (as the glass comes) to `1`: it
+  /// blurs what is behind it by up to [maxExtraFrost] more. Colored glass
+  /// made clearer by [clarity] frosts less.
+  final double frosting;
+
   /// The appearance of frosted glass: switched-off tiles and panels.
   LiquidGlassAppearance get frost =>
       LiquidGlassAppearance.seaGlass(color: material.frost);
@@ -73,14 +83,45 @@ class ShowcaseStyle {
       shine: shine,
       lightAngle: lightAngle,
       clarity: clarity,
+      extraFrost: frosting * maxExtraFrost,
     ),
     ShowcaseMaterial.slab => LiquidGlassSettings.slabSeaGlass(
       finish: slabFinish.copyWith(
+        shadow: shadows ? null : 0,
         colorClarity: clarity * material.clarityShare,
       ),
       lightAngle: lightAngle,
+      frost: 1 + frosting * maxExtraFrost,
     ),
+    ShowcaseMaterial.clearSlab =>
+      LiquidGlassSettings.slabSeaGlass(
+        finish: slabFinish.copyWith(
+          shadow: shadows ? null : 0,
+          scatter: .24,
+          pitting: .3,
+          colorClarity: clarity,
+        ),
+        lightAngle: lightAngle,
+        frost: 1 + frosting * maxExtraFrost,
+      ).copyWith(
+        refractionHeight: 32,
+        refractionAmount: 26,
+        // Small tiles shrink the lens to fit, so it bends their rim rather
+        // than stretching the whole tile; large cards keep the full lens.
+        refractionFitsShape: true,
+      ),
   };
+
+  /// The body of a component that plays [role]: the accent in sea glass;
+  /// in slab glass, the concept's color for that role, as every component
+  /// of its sheet has its own.
+  Color roleBody(SlabRole role) => !material.isSlab
+      ? body
+      : seaGlassBody(
+          role.of(SlabSeaGlass.original),
+          density: tone.density,
+          strength: colorStrength,
+        );
 
   /// Whether the wallpaper needs light ink.
   bool get dark => wallpaper.dark;
@@ -103,6 +144,8 @@ class ShowcaseStyle {
     double? clarity,
     double? colorStrength,
     ShowcaseMaterial? material,
+    bool? shadows,
+    double? frosting,
   }) => ShowcaseStyle(
     accentIndex: accentIndex ?? this.accentIndex,
     tone: tone ?? this.tone,
@@ -115,6 +158,8 @@ class ShowcaseStyle {
     clarity: clarity ?? this.clarity,
     colorStrength: colorStrength ?? this.colorStrength,
     material: material ?? this.material,
+    shadows: shadows ?? this.shadows,
+    frosting: frosting ?? this.frosting,
   );
 
   @override
@@ -130,7 +175,9 @@ class ShowcaseStyle {
       other.lightAngle == lightAngle &&
       other.clarity == clarity &&
       other.colorStrength == colorStrength &&
-      other.material == material;
+      other.material == material &&
+      other.shadows == shadows &&
+      other.frosting == frosting;
 
   @override
   int get hashCode => Object.hash(
@@ -145,6 +192,8 @@ class ShowcaseStyle {
     clarity,
     colorStrength,
     material,
+    shadows,
+    frosting,
   );
 }
 
@@ -176,4 +225,18 @@ class ShowcaseScope extends InheritedNotifier<ValueNotifier<ShowcaseStyle>> {
         .notifier!;
     controller.value = change(controller.value);
   }
+}
+
+/// The drop shadow of a shape of [color]: sea glass's tinted shadow, or
+/// none for slab glass, whose finish casts its own away from the light. Both
+/// would give a slab a colored halo around it as well as its shadow.
+List<BoxShadow> showcaseShadows(
+  BuildContext context,
+  Color color, {
+  double elevation = 6,
+}) {
+  final style = ShowcaseScope.of(context);
+  return style.material.isSlab || !style.shadows
+      ? const []
+      : SeaGlassFinish.shadows(color, elevation: elevation);
 }

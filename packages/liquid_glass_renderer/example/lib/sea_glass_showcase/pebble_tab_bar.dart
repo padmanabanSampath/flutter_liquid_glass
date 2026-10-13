@@ -85,7 +85,7 @@ class _Pebble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final body = style.body;
+    final body = style.roleBody(SlabRole.secondary);
     final ink = selected ? inkOn(body) : style.ink;
     return Semantics(
       button: true,
@@ -107,7 +107,8 @@ class _Pebble extends StatelessWidget {
               appearance: selected
                   ? LiquidGlassAppearance.seaGlass(color: body)
                   : null,
-              shadows: SeaGlassFinish.shadows(
+              shadows: showcaseShadows(
+                context,
                 selected ? body : frostedWhite,
                 elevation: selected ? 6 : 3,
               ),

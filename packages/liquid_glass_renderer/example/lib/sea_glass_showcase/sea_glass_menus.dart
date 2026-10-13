@@ -7,6 +7,7 @@ import 'package:liquid_glass_renderer_example/sea_glass_showcase/living_glass.da
 import 'package:liquid_glass_renderer_example/sea_glass_showcase/pages/common.dart';
 import 'package:liquid_glass_renderer_example/sea_glass_showcase/renderer_backend.dart';
 import 'package:liquid_glass_renderer_example/sea_glass_showcase/showcase_options.dart';
+import 'package:liquid_glass_renderer_example/sea_glass_showcase/showcase_style.dart';
 import 'package:liquid_glass_renderer_example/sea_glass_showcase/wallpapers.dart';
 
 /// The floating controls of the showcase, in the bottom trailing corner, or
@@ -28,6 +29,8 @@ class SeaGlassControls extends StatefulWidget {
     required this.shine,
     required this.clarity,
     required this.material,
+    required this.shadows,
+    required this.frosting,
     required this.colorStrength,
     required this.onAccent,
     required this.onTone,
@@ -37,6 +40,8 @@ class SeaGlassControls extends StatefulWidget {
     required this.onShine,
     required this.onClarity,
     required this.onMaterial,
+    required this.onShadows,
+    required this.onFrosting,
     required this.onColorStrength,
     this.top = false,
     super.key,
@@ -53,6 +58,8 @@ class SeaGlassControls extends StatefulWidget {
   final ShowcaseShine shine;
   final double clarity;
   final ShowcaseMaterial material;
+  final bool shadows;
+  final double frosting;
   final double colorStrength;
   final ValueChanged<int> onAccent;
   final ValueChanged<ShowcaseTone> onTone;
@@ -62,6 +69,8 @@ class SeaGlassControls extends StatefulWidget {
   final ValueChanged<ShowcaseShine> onShine;
   final ValueChanged<double> onClarity;
   final ValueChanged<ShowcaseMaterial> onMaterial;
+  final ValueChanged<bool> onShadows;
+  final ValueChanged<double> onFrosting;
   final ValueChanged<double> onColorStrength;
 
   @override
@@ -214,6 +223,8 @@ class _SeaGlassControlsState extends State<SeaGlassControls>
                       shine: widget.shine,
                       clarity: widget.clarity,
                       material: widget.material,
+                      shadows: widget.shadows,
+                      frosting: widget.frosting,
                       colorStrength: widget.colorStrength,
                       onWallpaper: widget.onWallpaper,
                       onFinish: widget.onFinish,
@@ -222,6 +233,8 @@ class _SeaGlassControlsState extends State<SeaGlassControls>
                       onShine: widget.onShine,
                       onClarity: widget.onClarity,
                       onMaterial: widget.onMaterial,
+                      onShadows: widget.onShadows,
+                      onFrosting: widget.onFrosting,
                       onColorStrength: widget.onColorStrength,
                     ),
                   ),
@@ -257,20 +270,18 @@ class _SeaGlassControlsState extends State<SeaGlassControls>
                                 const Offset(_buttonSize + _buttonGap, 0),
                             _buttonSize,
                             _RoundButton(
-                              label:
-                                  widget.material == ShowcaseMaterial.seaGlass
-                                  ? 'Switch to slab glass'
-                                  : 'Switch to sea glass',
-                              icon: widget.material == ShowcaseMaterial.seaGlass
-                                  ? Icons.layers_rounded
-                                  : Icons.water_drop_rounded,
+                              label: 'Switch to ${widget.material.next.label}',
+                              icon: switch (widget.material.next) {
+                                ShowcaseMaterial.seaGlass =>
+                                  Icons.water_drop_rounded,
+                                ShowcaseMaterial.slab => Icons.layers_rounded,
+                                ShowcaseMaterial.clearSlab =>
+                                  Icons.blur_on_rounded,
+                              },
                               ink: ink,
                               shape: widget.shape,
-                              onTap: () => widget.onMaterial(
-                                widget.material == ShowcaseMaterial.seaGlass
-                                    ? ShowcaseMaterial.slab
-                                    : ShowcaseMaterial.seaGlass,
-                              ),
+                              onTap: () =>
+                                  widget.onMaterial(widget.material.next),
                             ),
                           ),
                         if (open < 1)
@@ -388,7 +399,7 @@ class _RoundButton extends StatelessWidget {
             appearance: body == null
                 ? null
                 : LiquidGlassAppearance.seaGlass(color: body),
-            shadows: SeaGlassFinish.shadows(body ?? frostedWhite),
+            shadows: showcaseShadows(context, body ?? frostedWhite),
             child: Center(
               child: Transform.rotate(
                 angle: turns * 2 * math.pi,
@@ -431,7 +442,7 @@ class _Pebble extends StatelessWidget {
           child: LiquidGlass.grouped(
             shape: pebbleOutline(context, shape, seedOf(name)),
             appearance: LiquidGlassAppearance.seaGlass(color: body),
-            shadows: SeaGlassFinish.shadows(body, elevation: 4),
+            shadows: showcaseShadows(context, body, elevation: 4),
             // Small pebbles are thin, so over a saturated wallpaper they
             // show mostly the backdrop. A solid core keeps each color
             // recognizable.
@@ -486,6 +497,8 @@ class _StyleTray extends StatelessWidget {
     required this.shine,
     required this.clarity,
     required this.material,
+    required this.shadows,
+    required this.frosting,
     required this.colorStrength,
     required this.onWallpaper,
     required this.onFinish,
@@ -494,6 +507,8 @@ class _StyleTray extends StatelessWidget {
     required this.onShine,
     required this.onClarity,
     required this.onMaterial,
+    required this.onShadows,
+    required this.onFrosting,
     required this.onColorStrength,
   });
 
@@ -515,6 +530,8 @@ class _StyleTray extends StatelessWidget {
   final ShowcaseShine shine;
   final double clarity;
   final ShowcaseMaterial material;
+  final bool shadows;
+  final double frosting;
   final double colorStrength;
   final ValueChanged<ShowcaseWallpaper> onWallpaper;
   final ValueChanged<ShowcaseFinish> onFinish;
@@ -523,6 +540,8 @@ class _StyleTray extends StatelessWidget {
   final ValueChanged<ShowcaseShine> onShine;
   final ValueChanged<double> onClarity;
   final ValueChanged<ShowcaseMaterial> onMaterial;
+  final ValueChanged<bool> onShadows;
+  final ValueChanged<double> onFrosting;
   final ValueChanged<double> onColorStrength;
 
   @override
@@ -533,7 +552,7 @@ class _StyleTray extends StatelessWidget {
         visibility: progress,
         child: LiquidGlass(
           shape: const LiquidRoundedSuperellipse(borderRadius: 30),
-          shadows: SeaGlassFinish.shadows(frostedWhite),
+          shadows: showcaseShadows(context, frostedWhite),
           child: Opacity(
             opacity: progress,
             // A milky backing keeps the options legible over any wallpaper;
@@ -634,11 +653,27 @@ class _StyleTray extends StatelessWidget {
                           onSelected: (i) => onShine(ShowcaseShine.values[i]),
                         ),
                         const SizedBox(height: 14),
-                        _SectionLabel('Clarity and color', ink),
+                        _SectionLabel('Shadow', ink),
+                        GlassSegmented(
+                          labels: const ['On', 'Off'],
+                          selected: shadows ? 0 : 1,
+                          ink: ink,
+                          body: body,
+                          onSelected: (i) => onShadows(i == 0),
+                        ),
+                        const SizedBox(height: 14),
+                        _SectionLabel('Clarity, frost and color', ink),
                         GlassValueSlider(
                           label: 'Transparency',
                           value: clarity,
                           onChanged: onClarity,
+                          knob: body,
+                          ink: ink,
+                        ),
+                        GlassValueSlider(
+                          label: 'Frost',
+                          value: frosting,
+                          onChanged: onFrosting,
                           knob: body,
                           ink: ink,
                         ),
@@ -742,7 +777,7 @@ class _RendererSectionState extends State<_RendererSection> {
                     child: LiquidGlass(
                       shape: const LiquidRoundedSuperellipse(borderRadius: 17),
                       appearance: LiquidGlassAppearance.seaGlass(color: body),
-                      shadows: SeaGlassFinish.shadows(body, elevation: 3),
+                      shadows: showcaseShadows(context, body, elevation: 3),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
@@ -906,7 +941,7 @@ class GlassSegmented extends StatelessWidget {
                     borderRadius: _height / 2 - _inset,
                   ),
                   appearance: LiquidGlassAppearance.seaGlass(color: body),
-                  shadows: SeaGlassFinish.shadows(body, elevation: 2),
+                  shadows: showcaseShadows(context, body, elevation: 2),
                   child: const SizedBox.expand(),
                 ),
               ),

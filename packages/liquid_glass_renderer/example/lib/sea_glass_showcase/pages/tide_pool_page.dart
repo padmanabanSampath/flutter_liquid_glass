@@ -207,7 +207,7 @@ class _PoolState extends State<_Pool> with SingleTickerProviderStateMixin {
                 labels: [for (final lens in PebbleLens.values) lens.label],
                 selected: _lens.index,
                 ink: style.ink,
-                body: style.body,
+                body: style.roleBody(SlabRole.positive),
                 onSelected: (i) => setState(() => _lens = PebbleLens.values[i]),
               ),
             ),
@@ -250,7 +250,7 @@ class _PoolState extends State<_Pool> with SingleTickerProviderStateMixin {
             child: LiquidGlass.grouped(
               shape: LiquidBlob.alive(time: time, seed: seed),
               appearance: LiquidGlassAppearance.seaGlass(color: body),
-              shadows: SeaGlassFinish.shadows(body),
+              shadows: showcaseShadows(context, body),
               child: Center(
                 child: Text(
                   name ?? style.accentName,
@@ -733,7 +733,7 @@ class _OutlineTileState extends State<_OutlineTile> {
                   child: LiquidGlass(
                     shape: widget.outline(turn),
                     appearance: LiquidGlassAppearance.seaGlass(color: body),
-                    shadows: SeaGlassFinish.shadows(body, elevation: 5),
+                    shadows: showcaseShadows(context, body, elevation: 5),
                     child: const SizedBox.expand(),
                   ),
                 ),

@@ -154,6 +154,8 @@ class _SeaGlassShowcasePageState extends State<SeaGlassShowcasePage> {
                           shine: style.shine,
                           clarity: style.clarity,
                           material: style.material,
+                          shadows: style.shadows,
+                          frosting: style.frosting,
                           colorStrength: style.colorStrength,
                           onAccent: (index) => _restyle(
                             (style) => style.copyWith(accentIndex: index),
@@ -174,7 +176,25 @@ class _SeaGlassShowcasePageState extends State<SeaGlassShowcasePage> {
                             (style) => style.copyWith(clarity: clarity),
                           ),
                           onMaterial: (material) => _restyle(
-                            (style) => style.copyWith(material: material),
+                            (style) => style.copyWith(
+                              material: material,
+                              // Slab glass reads best on the concept's pale
+                              // paper; a wallpaper chosen by hand stays.
+                              wallpaper: switch (style.wallpaper) {
+                                ShowcaseWallpaper.seaMist
+                                    when material.isSlab =>
+                                  ShowcaseWallpaper.paper,
+                                ShowcaseWallpaper.paper when !material.isSlab =>
+                                  ShowcaseWallpaper.seaMist,
+                                final wallpaper => wallpaper,
+                              },
+                            ),
+                          ),
+                          onFrosting: (frosting) => _restyle(
+                            (style) => style.copyWith(frosting: frosting),
+                          ),
+                          onShadows: (shadows) => _restyle(
+                            (style) => style.copyWith(shadows: shadows),
                           ),
                           onColorStrength: (strength) => _restyle(
                             (style) => style.copyWith(colorStrength: strength),
