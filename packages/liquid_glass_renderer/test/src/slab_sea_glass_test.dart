@@ -13,13 +13,13 @@ const _dpr = 2.0;
 const _sceneSize = Size(240, 140);
 const _tileRect = Rect.fromLTWH(20, 20, 200, 100);
 
-/// The Google finish without its shadow, so the tile is the glass alone.
-LiquidGlassSettings _google({
+/// The slab finish without its shadow, so the tile is the glass alone.
+LiquidGlassSettings _slab({
   double lightAngle = -1.07,
   GlassLight light = const GlassLight(),
   double wobble = 0,
-}) => LiquidGlassSettings.googleSeaGlass(
-  finish: const SeaGlassFinish.google().copyWith(shadow: 0, wobble: wobble),
+}) => LiquidGlassSettings.slabSeaGlass(
+  finish: const SeaGlassFinish.slab().copyWith(shadow: 0, wobble: wobble),
   light: light,
   lightAngle: lightAngle,
 );
@@ -108,17 +108,17 @@ double _meanLuminance(List<int> Function(double, double) pixel, Rect rect) {
 }
 
 void main() {
-  group('SeaGlassFinish.google', () {
+  group('SeaGlassFinish.slab', () {
     test('is a lit slab finish; the other finishes have none of it', () {
-      const google = SeaGlassFinish.google();
-      expect(google.isEnabled, isTrue);
-      expect(google.effectiveShading, 1);
-      expect(google.effectiveGlow, 1);
-      expect(google.effectiveFlecks, 1);
-      expect(google.effectiveSparkle, 0);
-      expect(google.effectiveShadow, 1);
-      expect(google.effectiveElevation, greaterThan(0));
-      expect(google.effectiveWobble, greaterThan(0));
+      const slab = SeaGlassFinish.slab();
+      expect(slab.isEnabled, isTrue);
+      expect(slab.effectiveShading, 1);
+      expect(slab.effectiveGlow, 1);
+      expect(slab.effectiveFlecks, 1);
+      expect(slab.effectiveSparkle, 0);
+      expect(slab.effectiveShadow, 1);
+      expect(slab.effectiveElevation, greaterThan(0));
+      expect(slab.effectiveWobble, greaterThan(0));
       for (final finish in const [
         SeaGlassFinish(),
         SeaGlassFinish.frosted(),
@@ -159,9 +159,9 @@ void main() {
     });
 
     test('copyWith and JSON preserve the slab controls', () {
-      const google = SeaGlassFinish.google();
-      expect(SeaGlassFinish.fromJson(google.toJson()), google);
-      final changed = google.copyWith(
+      const slab = SeaGlassFinish.slab();
+      expect(SeaGlassFinish.fromJson(slab.toJson()), slab);
+      final changed = slab.copyWith(
         shading: 0.5,
         glow: 0.25,
         flecks: 0.6,
@@ -175,7 +175,7 @@ void main() {
       expect(changed.shadow, 0.75);
       expect(changed.elevation, 40);
       expect(changed.wobble, 1.5);
-      expect(changed, isNot(google));
+      expect(changed, isNot(slab));
       expect(SeaGlassFinish.fromJson(changed.toJson()), changed);
     });
   });
@@ -221,15 +221,15 @@ void main() {
     });
   });
 
-  group('GoogleSeaGlass', () {
+  group('SlabSeaGlass', () {
     test('cycles through four distinctly named, opaque sets', () {
-      expect(GoogleSeaGlass.values, hasLength(4));
-      expect(GoogleSeaGlass.values.first, GoogleSeaGlass.original);
+      expect(SlabSeaGlass.values, hasLength(4));
+      expect(SlabSeaGlass.values.first, SlabSeaGlass.original);
       expect(
-        GoogleSeaGlass.values.map((set) => set.name).toSet(),
+        SlabSeaGlass.values.map((set) => set.name).toSet(),
         hasLength(4),
       );
-      for (final set in GoogleSeaGlass.values) {
+      for (final set in SlabSeaGlass.values) {
         for (final color in [
           set.primary,
           set.secondary,
@@ -249,16 +249,16 @@ void main() {
 
     test('colors become sea glass appearances', () {
       expect(
-        GoogleSeaGlass.appearance(GoogleSeaGlass.original.primary),
-        LiquidGlassAppearance.seaGlass(color: GoogleSeaGlass.original.primary),
+        SlabSeaGlass.appearance(SlabSeaGlass.original.primary),
+        LiquidGlassAppearance.seaGlass(color: SlabSeaGlass.original.primary),
       );
     });
   });
 
-  group('LiquidGlassSettings.googleSeaGlass', () {
-    test('carries the Google finish and the light', () {
-      final settings = LiquidGlassSettings.googleSeaGlass();
-      expect(settings.seaGlassFinish, const SeaGlassFinish.google());
+  group('LiquidGlassSettings.slabSeaGlass', () {
+    test('carries the slab finish and the light', () {
+      final settings = LiquidGlassSettings.slabSeaGlass();
+      expect(settings.seaGlassFinish, const SeaGlassFinish.slab());
       expect(settings.light, const GlassLight());
       // Straight above, as on the concept's phone screens.
       expect(settings.lightAngle, 0);
@@ -269,7 +269,7 @@ void main() {
     });
 
     test('the light takes part in equality, copyWith and JSON', () {
-      final settings = LiquidGlassSettings.googleSeaGlass();
+      final settings = LiquidGlassSettings.slabSeaGlass();
       const lamp = GlassLight(position: Offset(40, 30), height: 300);
       final lit = settings.copyWith(light: lamp);
       expect(lit.light, lamp);
@@ -280,7 +280,7 @@ void main() {
   });
 
   group('cast shadows', () {
-    final settings = LiquidGlassSettings.googleSeaGlass();
+    final settings = LiquidGlassSettings.slabSeaGlass();
     const body = Color(0xFFB9C2F3);
     const center = Offset(200, 200);
     const slab = Size(300, 90);
@@ -289,7 +289,7 @@ void main() {
       final regular = LiquidGlassSettings.seaGlass();
       expect(seaGlassCastShadows(regular, body, center, slab), isEmpty);
       final grounded = settings.copyWith(
-        seaGlassFinish: const SeaGlassFinish.google().copyWith(elevation: 0),
+        seaGlassFinish: const SeaGlassFinish.slab().copyWith(elevation: 0),
       );
       expect(seaGlassCastShadows(grounded, body, center, slab), isEmpty);
     });
@@ -311,7 +311,7 @@ void main() {
       }
       // Higher glass casts farther.
       final raised = turned.copyWith(
-        seaGlassFinish: const SeaGlassFinish.google().copyWith(elevation: 44),
+        seaGlassFinish: const SeaGlassFinish.slab().copyWith(elevation: 44),
       );
       final low = shadows.first;
       final high = seaGlassCastShadows(raised, body, center, slab).first;
@@ -380,7 +380,7 @@ void main() {
         Future<(double, double)> sides(double lightAngle) async {
           final pixel = await _render(
             tester,
-            _scene(_google(lightAngle: lightAngle), [_tile()]),
+            _scene(_slab(lightAngle: lightAngle), [_tile()]),
           );
           return (_meanLuminance(pixel, left), _meanLuminance(pixel, right));
         }
@@ -404,7 +404,7 @@ void main() {
           final pixel = await _render(
             tester,
             _scene(
-              _google(
+              _slab(
                 light: GlassLight(position: light, height: 160),
               ),
               [_tile()],
@@ -426,7 +426,7 @@ void main() {
         Future<List<int> Function(double, double)> over(Color backdrop) =>
             _render(
               tester,
-              _scene(_google(), [
+              _scene(_slab(), [
                 _tile(),
               ], backdrop: ColoredBox(color: backdrop)),
             );
@@ -449,8 +449,8 @@ void main() {
           final pixel = await _render(
             tester,
             _scene(
-              LiquidGlassSettings.googleSeaGlass(
-                finish: const SeaGlassFinish.google().copyWith(
+              LiquidGlassSettings.slabSeaGlass(
+                finish: const SeaGlassFinish.slab().copyWith(
                   shadow: 0,
                   wobble: 0,
                   flecks: flecks,
@@ -484,7 +484,7 @@ void main() {
       'a wobbling outline only ever sinks inside the shape',
       (tester) async {
         Widget scene(double wobble) => _scene(
-          _google(wobble: wobble),
+          _slab(wobble: wobble),
           [_tile()],
           backdrop: const ColoredBox(
             color: Colors.white,
@@ -528,11 +528,11 @@ void main() {
         const pill = Rect.fromLTWH(180, 50, 60, 40);
         final alone = await _render(
           tester,
-          _scene(_google(), [_tile()]),
+          _scene(_slab(), [_tile()]),
         );
         final over = await _render(
           tester,
-          _scene(_google(), [
+          _scene(_slab(), [
             _tile(rect: pill, color: const Color(0xFFE2F4DD), visibility: 0),
             _tile(),
           ]),

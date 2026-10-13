@@ -3,17 +3,17 @@ import 'package:flutter/painting.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_appearance.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_settings.dart';
 
-/// A set of glass colors from Google's Sea Glass concept, by the role each
+/// A set of glass colors from the Sea Glass design concept, by the role each
 /// plays in a UI.
 ///
 /// The concept cycles through four sets: [original], [beach], [jewel] and
 /// [frost]. Each color is the glass's body where it is thickest; the light
 /// brightens its thin edges and the side away from it (see
-/// [LiquidGlassSettings.googleSeaGlass]). Pass a color to
+/// [LiquidGlassSettings.slabSeaGlass]). Pass a color to
 /// [LiquidGlassAppearance.seaGlass].
-class GoogleSeaGlass with Equatable {
+class SlabSeaGlass with Equatable {
   /// Creates a glass set.
-  const GoogleSeaGlass({
+  const SlabSeaGlass({
     required this.name,
     required this.primary,
     required this.secondary,
@@ -64,7 +64,7 @@ class GoogleSeaGlass with Equatable {
 
   /// The concept's own glass: periwinkle, orchid, aqua, mint, coral and
   /// amber pastels.
-  static const original = GoogleSeaGlass(
+  static const original = SlabSeaGlass(
     name: 'Original glass',
     primary: Color(0xFFB9C2F3),
     secondary: Color(0xFFE9AFF4),
@@ -79,7 +79,7 @@ class GoogleSeaGlass with Equatable {
   );
 
   /// Greens and sea blues, with a peach call to action and clear accents.
-  static const beach = GoogleSeaGlass(
+  static const beach = SlabSeaGlass(
     name: 'Beach glass',
     primary: Color(0xFF9BA5F4),
     secondary: Color(0xFFADECAF),
@@ -94,7 +94,7 @@ class GoogleSeaGlass with Equatable {
   );
 
   /// Deep, saturated violet, indigo, teal and red.
-  static const jewel = GoogleSeaGlass(
+  static const jewel = SlabSeaGlass(
     name: 'Jewel glass',
     primary: Color(0xFF8F9AF4),
     secondary: Color(0xFFCC9BF6),
@@ -109,7 +109,7 @@ class GoogleSeaGlass with Equatable {
   );
 
   /// Frosted, nearly white glass with the faintest tints.
-  static const frost = GoogleSeaGlass(
+  static const frost = SlabSeaGlass(
     name: 'Frost glass',
     primary: Color(0xFFE6ECF8),
     secondary: Color(0xFFF3EAF6),
@@ -124,7 +124,7 @@ class GoogleSeaGlass with Equatable {
   );
 
   /// The sets in the order the concept cycles through them.
-  static const List<GoogleSeaGlass> values = [original, beach, jewel, frost];
+  static const List<SlabSeaGlass> values = [original, beach, jewel, frost];
 
   /// The sea glass appearance of [color], a color of this set.
   static LiquidGlassAppearance appearance(Color color) =>

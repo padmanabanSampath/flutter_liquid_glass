@@ -428,14 +428,15 @@ highlights with the device; feed the device's tilt (for example from a
 gyroscope) or a gesture into `lightAngle` to do the same. It is one uniform,
 so changing it never re-renders the geometry.
 
-### Google Sea Glass
+### Slab sea glass
 
 | Daylight | Flashlight |
 | --- | --- |
-| ![Pastel sea glass components lit from above](doc/readme/google-sea-glass.jpg) | ![The same components lit by a flashlight in a dim room](doc/readme/google-sea-glass-flashlight.jpg) |
+| ![Pastel sea glass components lit from above](doc/readme/slab-sea-glass.jpg) | ![The same components lit by a flashlight in a dim room](doc/readme/slab-sea-glass-flashlight.jpg) |
 
-A separate preset recreates the pastel glass of Google's Sea Glass concept
-(the community Figma file). It is an unofficial recreation, not a Google
+A separate preset of thick, milky pastel glass slabs, inspired by the Sea
+Glass design concept (a community Figma file). It is an unofficial
+recreation, not affiliated with or endorsed by Google, and not a Google
 API. Where the pebbles above are domes that bow the backdrop, this glass is
 a thick, milky slab flecked like terrazzo. Its color is deepest just above
 the middle; it brightens along its thin outline and glows where the light
@@ -445,16 +446,16 @@ lens.
 
 ```dart
 LiquidGlassLayer(
-  settings: LiquidGlassSettings.googleSeaGlass(),
+  settings: LiquidGlassSettings.slabSeaGlass(),
   child: LiquidGlass(
     shape: const LiquidRoundedSuperellipse(borderRadius: 40),
-    appearance: GoogleSeaGlass.appearance(GoogleSeaGlass.original.primary),
+    appearance: SlabSeaGlass.appearance(SlabSeaGlass.original.primary),
     child: const SizedBox(width: 320, height: 96),
   ),
 )
 ```
 
-`SeaGlassFinish.google()` turns on five controls the other finishes leave
+`SeaGlassFinish.slab()` turns on five controls the other finishes leave
 at `0`, so they render as before:
 
 | Control | Effect |
@@ -475,7 +476,7 @@ it fall off like a flashlight's beam. Moving the light only changes
 uniforms, never the geometry.
 
 ```dart
-LiquidGlassSettings.googleSeaGlass(
+LiquidGlassSettings.slabSeaGlass(
   light: GlassLight(
     position: pointerPosition,
     height: 360,
@@ -486,7 +487,7 @@ LiquidGlassSettings.googleSeaGlass(
 )
 ```
 
-`GoogleSeaGlass` holds the concept's four glass sets (`original`, `beach`,
+`SlabSeaGlass` holds the concept's four glass sets (`original`, `beach`,
 `jewel` and `frost`), each a color per role: `primary` for search bars and
 tiles, `secondary` for media cards, `tertiary` for navigation bars,
 `positive` for selections, `error` for calls to action, `accent` for
@@ -495,13 +496,13 @@ flecks, light and shadows, but does not refract; only full glass draws the
 wobble.
 
 The example recreates the concept's component sheet: a search bar that
-expands into an AI Mode answer, quick settings, a music card, segmented
+expands into an assistant answer, quick settings, a music card, segmented
 buttons, a floating action button menu, daylight, dusk and a flashlight that
 follows the pointer, and a tap on G cycles the glass sets:
 
 ```sh
 cd packages/liquid_glass_renderer/example
-flutter run -t lib/google_sea_glass_main.dart --enable-impeller --enable-flutter-gpu
+flutter run -t lib/slab_sea_glass_main.dart --enable-impeller --enable-flutter-gpu
 ```
 
 ### Cost
@@ -747,7 +748,7 @@ merge, and one that is alive), every preset
 in light and dark, the Liquid Glass slider, sea glass finish controls, a light
 angle, full/fake switching and several backdrops. Settings you tune can be
 saved as custom presets.
-`lib/google_sea_glass_main.dart` runs the [Google Sea Glass](#google-sea-glass)
+`lib/slab_sea_glass_main.dart` runs the [slab sea glass](#slab-sea-glass)
 component sheet.
 
 ## Limitations

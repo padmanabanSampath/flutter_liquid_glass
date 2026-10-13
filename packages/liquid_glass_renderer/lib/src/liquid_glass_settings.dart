@@ -3,10 +3,10 @@ import 'dart:math' as math;
 import 'package:equatable/equatable.dart';
 import 'package:flutter/widgets.dart';
 import 'package:liquid_glass_renderer/src/glass_light.dart';
-import 'package:liquid_glass_renderer/src/google_sea_glass.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_appearance.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_render_scope.dart';
 import 'package:liquid_glass_renderer/src/sea_glass.dart';
+import 'package:liquid_glass_renderer/src/slab_sea_glass.dart';
 import 'package:meta/meta.dart';
 
 /// Material parameters for the liquid-glass compositor.
@@ -106,14 +106,14 @@ class LiquidGlassSettings with Equatable {
     seaGlassFinish: finish,
   );
 
-  /// Google's Sea Glass concept: thick, milky slabs of pastel glass flecked
+  /// the Sea Glass design concept: thick, milky slabs of pastel glass flecked
   /// like terrazzo, lit by a light that moves and casting soft shadows with
   /// a band of colored light.
   ///
   /// Each shape shows its body color where it is thickest; the light
   /// brightens its thin outline and, most, the side away from the [light],
   /// where the light that went through it gathers (see
-  /// [SeaGlassFinish.google]). The glass is milky, so it shows its own color
+  /// [SeaGlassFinish.slab]). The glass is milky, so it shows its own color
   /// over any backdrop, but its thin rim is clear: content scrolling behind
   /// shows through it, bent by the lens. There is no iOS glint and no dark
   /// border, and the outlines are slightly hand-made.
@@ -124,9 +124,9 @@ class LiquidGlassSettings with Equatable {
   /// it, or move it with the pointer, for the concept's "move your pointer
   /// to shift the light", or give it a position and [GlassLight.reach] for a
   /// flashlight. Color shapes with [LiquidGlassAppearance.seaGlass] and the
-  /// colors of a [GoogleSeaGlass] set.
-  factory LiquidGlassSettings.googleSeaGlass({
-    SeaGlassFinish finish = const SeaGlassFinish.google(),
+  /// colors of a [SlabSeaGlass] set.
+  factory LiquidGlassSettings.slabSeaGlass({
+    SeaGlassFinish finish = const SeaGlassFinish.slab(),
     GlassLight light = const GlassLight(),
     double lightAngle = 0,
     double frost = 1,

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
-import 'package:liquid_glass_renderer_example/pages/google_sea_glass_page.dart';
+import 'package:liquid_glass_renderer_example/pages/slab_sea_glass_page.dart';
 
 const _wide = Size(1920, 1080);
 
-Future<GoogleSeaGlassPageState> _pumpPage(
+Future<SlabSeaGlassPageState> _pumpPage(
   WidgetTester tester, {
   Size size = _wide,
   double devicePixelRatio = 1,
@@ -17,13 +17,13 @@ Future<GoogleSeaGlassPageState> _pumpPage(
   await tester.pumpWidget(
     const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: GoogleSeaGlassPage(),
+      home: SlabSeaGlassPage(),
     ),
   );
   // The glass settles from its intro.
   await _frames(tester, 40);
-  return tester.state<GoogleSeaGlassPageState>(
-    find.byType(GoogleSeaGlassPage),
+  return tester.state<SlabSeaGlassPageState>(
+    find.byType(SlabSeaGlassPage),
   );
 }
 
@@ -65,18 +65,18 @@ void main() {
     await _close(tester);
   });
 
-  testWidgets('G cycles the glass sets and Undo restores one', (
+  testWidgets('the sparkle cycles the glass sets and Undo restores one', (
     tester,
   ) async {
     final page = await _pumpPage(tester);
-    expect(page.glass, GoogleSeaGlass.original);
-    await tester.tap(find.text('G'));
+    expect(page.glass, SlabSeaGlass.original);
+    await tester.tap(find.byIcon(Icons.auto_awesome_rounded));
     await _frames(tester, 10);
-    expect(page.glass, GoogleSeaGlass.beach);
-    expect(find.text(GoogleSeaGlass.beach.name), findsOneWidget);
+    expect(page.glass, SlabSeaGlass.beach);
+    expect(find.text(SlabSeaGlass.beach.name), findsOneWidget);
     await tester.tap(find.text('Undo'));
     await _frames(tester, 10);
-    expect(page.glass, GoogleSeaGlass.original);
+    expect(page.glass, SlabSeaGlass.original);
     await _close(tester);
   });
 

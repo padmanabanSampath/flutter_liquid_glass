@@ -5,23 +5,23 @@ import 'dart:ui' show lerpDouble;
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
-/// A recreation of Google's Sea Glass concept: a sheet of Material
+/// A recreation of the Sea Glass design concept: a sheet of Material
 /// components in thick, milky pastel glass under a light that follows the
 /// pointer.
 ///
 /// The light shades every slab and casts its shadow
-/// ([LiquidGlassSettings.googleSeaGlass]). The moon dims the room to dusk,
+/// ([LiquidGlassSettings.slabSeaGlass]). The moon dims the room to dusk,
 /// the flashlight turns the light into a beam aimed by the pointer, and the
-/// slider dims everything. Tap G for the other glass sets.
+/// slider dims everything. Tap the sparkle for the other glass sets.
 ///
 /// The components share one glass layer; the floating action button, its
 /// menu and the toasts float above in a second one, so neither passes a
 /// layer's sixteen shapes.
-class GoogleSeaGlassPage extends StatefulWidget {
-  const GoogleSeaGlassPage({super.key});
+class SlabSeaGlassPage extends StatefulWidget {
+  const SlabSeaGlassPage({super.key});
 
   @override
-  State<GoogleSeaGlassPage> createState() => GoogleSeaGlassPageState();
+  State<SlabSeaGlassPage> createState() => SlabSeaGlassPageState();
 }
 
 /// The two tracks the media card plays.
@@ -132,7 +132,7 @@ enum _Layout {
 }
 
 @visibleForTesting
-class GoogleSeaGlassPageState extends State<GoogleSeaGlassPage>
+class SlabSeaGlassPageState extends State<SlabSeaGlassPage>
     with TickerProviderStateMixin {
   /// The light rises over the first second and a half: long shadows swing
   /// in under the glass, as when the concept loads.
@@ -178,7 +178,7 @@ class GoogleSeaGlassPageState extends State<GoogleSeaGlassPage>
 
   /// The glass set in use.
   @visibleForTesting
-  GoogleSeaGlass get glass => GoogleSeaGlass.values[_glass];
+  SlabSeaGlass get glass => SlabSeaGlass.values[_glass];
 
   @override
   void dispose() {
@@ -196,14 +196,14 @@ class GoogleSeaGlassPageState extends State<GoogleSeaGlassPage>
   @visibleForTesting
   LiquidGlassSettings settingsFor(Size screen) {
     final rise = Curves.easeOutCubic.transform(_intro.value);
-    final finish = const SeaGlassFinish.google().copyWith(
+    final finish = const SeaGlassFinish.slab().copyWith(
       elevation: lerpDouble(80, 22, rise),
     );
     final level = 0.72 + 0.28 * (_brightness / 0.78).clamp(0.0, 1.0);
     final center = screen.center(Offset.zero);
     final pointer = _pointer ?? center;
     if (_flashlight) {
-      return LiquidGlassSettings.googleSeaGlass(
+      return LiquidGlassSettings.slabSeaGlass(
         finish: finish,
         light: GlassLight(
           position: pointer,
@@ -222,7 +222,7 @@ class GoogleSeaGlassPageState extends State<GoogleSeaGlassPage>
     }
     // The pointer turns the daylight a little, as if it were moving the sun.
     final shift = (pointer.dx - center.dx) / math.max(screen.width, 1);
-    return LiquidGlassSettings.googleSeaGlass(
+    return LiquidGlassSettings.slabSeaGlass(
       finish: finish,
       lightAngle: 0.6 * shift,
       light: GlassLight(
@@ -259,7 +259,7 @@ class GoogleSeaGlassPageState extends State<GoogleSeaGlassPage>
   void _nextGlass() {
     setState(() {
       _undoGlass = _glass;
-      _glass = (_glass + 1) % GoogleSeaGlass.values.length;
+      _glass = (_glass + 1) % SlabSeaGlass.values.length;
     });
     _showToast(glass.name, action: 'Undo');
   }
@@ -478,13 +478,10 @@ class GoogleSeaGlassPageState extends State<GoogleSeaGlassPage>
           'avatar',
           const LiquidOval(),
           g.avatar,
-          Text(
-            'G',
-            style: TextStyle(
-              color: const Color(0xFF8A1F1F),
-              fontSize: 46 * u,
-              fontWeight: FontWeight.w700,
-            ),
+          Icon(
+            Icons.auto_awesome_rounded,
+            color: const Color(0xFF8A1F1F),
+            size: 46 * u,
           ),
           onTap: _nextGlass,
         ),
@@ -744,7 +741,7 @@ class _Glass extends StatelessWidget {
 }
 
 /// A milky glass chip on another glass: the selection on toolbars, the
-/// play button, the AI Mode button.
+/// play button, the assistant button.
 class _Chip extends StatelessWidget {
   const _Chip({
     required this.color,
@@ -822,7 +819,7 @@ class _SearchContent extends StatelessWidget {
               behavior: HitTestBehavior.opaque,
               onTap: onOpen,
               child: Text(
-                aiMode ? 'Ask AI Mode' : 'Search',
+                aiMode ? 'Ask the assistant' : 'Search',
                 maxLines: 1,
                 style: TextStyle(
                   color: _ink.withValues(alpha: 0.75),
@@ -850,7 +847,7 @@ class _SearchContent extends StatelessWidget {
                   Icon(Icons.auto_awesome, size: 26 * u, color: _ink),
                   SizedBox(width: 8 * u),
                   Text(
-                    'AI Mode',
+                    'Assistant',
                     style: TextStyle(
                       color: _ink,
                       fontSize: 24 * u,
@@ -924,7 +921,7 @@ class _SearchContent extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'AI MODE · DEMO REPLY',
+                          'ASSISTANT · DEMO REPLY',
                           style: TextStyle(
                             color: _ink.withValues(alpha: 0.6),
                             fontSize: 15 * u,

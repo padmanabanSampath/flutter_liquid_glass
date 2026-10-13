@@ -57,8 +57,9 @@
   shoulder facing the light, a softer one on the far wall and a thin bright
   line along the outline, following `lightAngle`. Real glass and FakeGlass.
 - **More colors.** `SeaGlassColors.ruby`, `clear` and `mist`.
-- **Google Sea Glass.** A separate preset after Google's Sea Glass concept:
-  `LiquidGlassSettings.googleSeaGlass()` with `SeaGlassFinish.google()`
+- **Slab sea glass.** A separate preset of thick, milky glass slabs,
+  inspired by the Sea Glass design concept:
+  `LiquidGlassSettings.slabSeaGlass()` with `SeaGlassFinish.slab()`
   renders thick, milky slabs, lit from straight above by default. New finish
   controls, all `0` in the other finishes: `shading` shows the body color
   where the slab is thickest, brightens its thin outline and keeps its rim
@@ -66,13 +67,13 @@
   the edge away from the light, where the light through the slab gathers;
   `flecks` chips the face like terrazzo; `shadow` casts a soft shadow from
   `elevation` points up with a band of the glass's color; and `wobble` sinks
-  the outline in hand-made undulations (full glass only). `GoogleSeaGlass`
+  the outline in hand-made undulations (full glass only). `SlabSeaGlass`
   holds the concept's four glass sets by role.
 - **Scene light.** `LiquidGlassSettings.light` (`GlassLight`) is daylight
   along `lightAngle`, or, given a `position`, a lamp that lights each shape
   from its own side and fans shadows out away from itself; with `color`,
   `intensity`, `ambient` and a flashlight `reach`. It is uniforms only.
-- **Google Sea Glass example.** `example/lib/google_sea_glass_main.dart`
+- **Slab sea glass example.** `example/lib/slab_sea_glass_main.dart`
   recreates the concept's component sheet, with daylight, dusk, a flashlight
   that follows the pointer and the four glass sets.
 

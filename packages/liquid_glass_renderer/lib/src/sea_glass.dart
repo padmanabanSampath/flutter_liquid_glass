@@ -3,9 +3,9 @@ import 'dart:math' as math;
 import 'package:equatable/equatable.dart';
 import 'package:flutter/painting.dart';
 import 'package:liquid_glass_renderer/src/glass_light.dart';
-import 'package:liquid_glass_renderer/src/google_sea_glass.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_appearance.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_settings.dart';
+import 'package:liquid_glass_renderer/src/slab_sea_glass.dart';
 import 'package:meta/meta.dart';
 
 /// The tumbled, frosted surface of sea glass.
@@ -109,15 +109,15 @@ class SeaGlassFinish with Equatable {
       elevation = 12,
       wobble = 0;
 
-  /// The milky, candy-like sea glass of Google's Sea Glass concept: thick
+  /// The milky, candy-like sea glass of the Sea Glass design concept: thick
   /// slabs of nearly opaque pastel glass flecked like terrazzo, brightest
   /// where they are thin and where the light that went through them
   /// gathers, casting soft shadows with a band of colored light, and with
   /// slightly hand-made outlines.
   ///
-  /// Use it through [LiquidGlassSettings.googleSeaGlass], which also turns
-  /// off the iOS glint and border, and color shapes from [GoogleSeaGlass].
-  const SeaGlassFinish.google()
+  /// Use it through [LiquidGlassSettings.slabSeaGlass], which also turns
+  /// off the iOS glint and border, and color shapes from [SlabSeaGlass].
+  const SeaGlassFinish.slab()
     : strength = 1,
       depth = 14,
       scatter = 0.85,
