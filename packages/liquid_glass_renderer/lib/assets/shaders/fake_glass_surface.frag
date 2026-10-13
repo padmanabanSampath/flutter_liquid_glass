@@ -171,8 +171,11 @@ float seaGlassGloss(float inward, vec2 normal) {
 // render shader's slab shading does.
 vec4 seaGlassSlab(vec2 position, float inward, vec2 normal, float scatter) {
   // From the surface's center, as the final render shader lights a shape.
-  vec2 toward = uSeaGlassLight.z > 0.0 ? uSeaGlassLight.xy : -uLightDirection;
-  float distance = max(length(toward), 1e-6);
+  // Explicitly highp: this file is mediump, where the squared length of a
+  // light more than about 256 px away overflows half precision (65504).
+  highp vec2 toward =
+      uSeaGlassLight.z > 0.0 ? uSeaGlassLight.xy : -uLightDirection;
+  highp float distance = max(length(toward), 1e-6);
   toward /= distance;
   // A positioned light right above the surface lights it evenly.
   float tilt = uSeaGlassLight.z > 0.0

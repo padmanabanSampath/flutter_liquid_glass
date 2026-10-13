@@ -172,7 +172,24 @@ class FlutterGpuGeometryRenderer {
   /// have not completed on the GPU.
   static List<int> _pendingPerSlot = const [];
 
+  /// Emplacements in the current slot's block since it was reset.
+  static int _slotEmplacements = 0;
+
   static const int _hostBufferSlotsPerFrame = 32;
+
+  /// Starts a fresh host buffer with blocks of [blockLength]. Command
+  /// buffers in flight keep the old buffer's blocks alive, and their
+  /// completions no longer count against the new one's slots.
+  static gpu.HostBuffer _createHostBuffer(int blockLength) {
+    final hostBuffer = _sharedHostBuffer = gpu.gpuContext.createHostBuffer(
+      blockLengthInBytes: blockLength,
+    );
+    _sharedHostBufferBlockLength = blockLength;
+    _hostBufferSlot = 0;
+    _slotEmplacements = 0;
+    _pendingPerSlot = List.filled(hostBuffer.frameCount, 0);
+    return hostBuffer;
+  }
 
   // These ownership counters exclude clones held by callers and native
   // references retained by submitted scenes; they are not GPU memory metrics.
@@ -203,13 +220,7 @@ class FlutterGpuGeometryRenderer {
     final blockLength = alignedSize * _hostBufferSlotsPerFrame;
     if (_sharedHostBuffer == null ||
         _sharedHostBufferBlockLength < blockLength) {
-      // Command buffers in flight keep the old buffer's blocks alive.
-      final hostBuffer = _sharedHostBuffer = gpu.gpuContext.createHostBuffer(
-        blockLengthInBytes: blockLength,
-      );
-      _sharedHostBufferBlockLength = blockLength;
-      _hostBufferSlot = 0;
-      _pendingPerSlot = List.filled(hostBuffer.frameCount, 0);
+      _createHostBuffer(blockLength);
     }
     // This is also defined for direct renderer callers outside
     // handleDrawFrame while still advancing once per engine frame in
@@ -226,6 +237,7 @@ class FlutterGpuGeometryRenderer {
       if (_pendingPerSlot[next] == 0) {
         _sharedHostBuffer!.reset();
         _hostBufferSlot = next;
+        _slotEmplacements = 0;
         _sharedHostBufferFrame = timestamp;
       } else {
         assert(() {
@@ -234,8 +246,26 @@ class FlutterGpuGeometryRenderer {
         }(), 'Count deferred host buffer resets in debug builds.');
       }
     }
+    // Every call is followed by one emplacement of at most the aligned
+    // size, so a block holds exactly this many. Past it, HostBuffer would
+    // take its overflow path, which binds the whole block (more than the
+    // 64 KB uniform range many Vulkan GPUs allow) and allocates another
+    // block on every overflow without reusing them.
+    if (_slotEmplacements >= _hostBufferSlotsPerFrame) {
+      assert(() {
+        debugHostBufferReplacementCount++;
+        return true;
+      }(), 'Count host buffer replacements in debug builds.');
+      _createHostBuffer(_sharedHostBufferBlockLength);
+      _sharedHostBufferFrame = timestamp;
+    }
+    _slotEmplacements++;
     return _sharedHostBuffer!;
   }
+
+  /// Host buffers started afresh because the current slot's block was full.
+  @visibleForTesting
+  static int debugHostBufferReplacementCount = 0;
 
   /// Host buffer resets put off because the GPU had not finished with the
   /// slot they would rewind into.
@@ -854,14 +884,26 @@ class FlutterGpuGeometryRenderer {
   /// flushes passes of layers that were painted but not composited.
   static void flushPendingSubmissions() {
     if (_pendingCommandBuffers.isEmpty) return;
-    for (final commandBuffer in _pendingCommandBuffers) {
-      commandBuffer.submit();
+    // Take the list first: a submit that throws must not leave it holding
+    // buffers already submitted, which every later flush would submit again
+    // while the ones after it never run.
+    final commandBuffers = List.of(_pendingCommandBuffers);
+    _pendingCommandBuffers.clear();
+    Object? error;
+    StackTrace? stackTrace;
+    for (final commandBuffer in commandBuffers) {
+      try {
+        commandBuffer.submit();
+      } on Object catch (e, s) {
+        error ??= e;
+        stackTrace ??= s;
+      }
       assert(() {
         debugBatchedSubmitCount++;
         return true;
       }(), 'Count batched submissions in debug builds.');
     }
-    _pendingCommandBuffers.clear();
+    if (error != null) Error.throwWithStackTrace(error, stackTrace!);
   }
 
   /// Frames after its replacement before a texture may be rendered into

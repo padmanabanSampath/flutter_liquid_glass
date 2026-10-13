@@ -833,9 +833,11 @@ abstract class LiquidGlassRenderObject extends RenderProxyBox
   bool get hasLayerShadows => shapesWithGeometry.any(
     (entry) => entry.$2.shapes.any(
       (shape) =>
-          shape.shadows.isNotEmpty ||
-          (settings.seaGlassFinish.effectiveShadow > 0 &&
-              shape.renderObject.layerCastsShadow),
+          // Hidden glass casts nothing, so it needs no shadow layer.
+          shape.appearance.visibility > 0 &&
+          (shape.shadows.isNotEmpty ||
+              (settings.seaGlassFinish.effectiveShadow > 0 &&
+                  shape.renderObject.layerCastsShadow)),
     ),
   );
 

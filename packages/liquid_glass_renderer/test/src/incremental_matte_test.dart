@@ -455,6 +455,36 @@ void main() {
       );
     });
 
+    test('a full slot starts a fresh host buffer', () async {
+      // Each slot's block holds 32 emplacements. More within one frame, or
+      // while the GPU holds the next slot, must not take HostBuffer's
+      // overflow path, which binds the whole block (past the 64 KB uniform
+      // range many Vulkan GPUs allow) and allocates a block every time.
+      // Outside widget frames the frame timestamp stays put, so all these
+      // renders share one slot.
+      final renderer = await FlutterGpuGeometryRenderer.fromAsset(_bundle);
+      addTearDown(renderer.dispose);
+      final replaced =
+          FlutterGpuGeometryRenderer.debugHostBufferReplacementCount;
+      var scene = base;
+      for (var step = 0; step < 40; step++) {
+        scene = [...scene];
+        scene[step % 4 + 1] = (
+          scene[step % 4 + 1].$1.moved(2, step.isEven ? 1 : -1),
+          scene[step % 4 + 1].$2,
+        );
+        render(renderer, scene);
+      }
+      expect(
+        FlutterGpuGeometryRenderer.debugHostBufferReplacementCount,
+        greaterThan(replaced),
+        reason: 'a full slot is replaced, not overflowed',
+      );
+      scene = [...scene];
+      scene[1] = (scene[1].$1.moved(3, 2), scene[1].$2);
+      await expectSameAsFullRender(renderer, scene);
+    });
+
     test('can be turned off', () async {
       FlutterGpuGeometryRenderer.incrementalMatteUpdates = false;
       final renderer = await FlutterGpuGeometryRenderer.fromAsset(_bundle);
