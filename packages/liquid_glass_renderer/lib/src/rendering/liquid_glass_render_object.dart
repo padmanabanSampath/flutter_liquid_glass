@@ -923,10 +923,10 @@ abstract class LiquidGlassRenderObject extends RenderProxyBox
         _drawGlassShape(
           canvas,
           shape.shape,
-          // A wobbling outline sinks inward; the shadow reaches under it.
-          (Offset.zero & shape.renderObject.size).deflate(
-            .5 + settings.seaGlassFinish.effectiveWobble,
-          ),
+          // Cut out at the shape's box. Where a wobbling outline sinks
+          // inward a sliver of backdrop shows; shadow reaching under it
+          // would show through the clear rim of slab glass as a dark ring.
+          (Offset.zero & shape.renderObject.size).deflate(.5),
           Paint()
             ..color = Color.fromRGBO(0, 0, 0, shapeVisibility)
             ..blendMode = BlendMode.dstOut,

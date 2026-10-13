@@ -112,8 +112,9 @@ float seaGlassThickness(float inwardDistance, float depth) {
 // where the slab is thickest, just inside its center toward the light. The
 // light that goes through brightens the slab where it is thin, along the
 // outline except on the wall facing the light, and most where it gathers,
-// on the far side (glow); the half facing the light also reflects a little
-// white. x is the brightening, a factor on the body; y the share of white.
+// on the far side (glow). The half facing the light keeps the body color,
+// so the pale glow is on the far side only. x is the brightening, a factor
+// on the body; y the share of white.
 //   q:      position in the shape's box, -1..1 per axis
 //   toward: unit direction toward the light in the shape's frame
 //   rim:    how much the outline here faces the light, -1..1
@@ -132,10 +133,7 @@ vec2 slabShading(
     float thin = (1.0 - smoothstep(0.0, 1.4, edge)) *
         mix(1.0, 0.1, smoothstep(0.0, 1.0, rim * tilt));
     float far = smoothstep(-0.05, 1.0, -across);
-    // The reflection fades again toward the outline facing the light.
-    float near = smoothstep(0.2, 0.65, across) *
-        (1.0 - smoothstep(0.75, 1.0, across));
-    return vec2(max(0.1 * thin, 0.17 * glow * far), 0.15 * near);
+    return vec2(max(0.1 * thin, 0.17 * glow * far), 0.0);
 }
 
 // The slab's color under shading (slabShading). Light added to the body

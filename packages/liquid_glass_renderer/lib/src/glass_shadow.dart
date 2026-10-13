@@ -337,8 +337,10 @@ class _RenderGlassShadow extends RenderProxyBox {
       if (needsCutout) {
         _drawShape(
           canvas,
-          // A wobbling outline sinks inward; the shadow reaches under it.
-          rect.deflate(.5 + settings.seaGlassFinish.effectiveWobble),
+          // Cut out at the shape's box. Where a wobbling outline sinks
+          // inward a sliver of backdrop shows; shadow reaching under it
+          // would show through the clear rim of slab glass as a dark ring.
+          rect.deflate(.5),
           Paint()..blendMode = BlendMode.dstOut,
         );
         canvas.restore();
