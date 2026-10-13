@@ -144,6 +144,7 @@ Pairwise alignment is a solved, cheap problem. Each permutation is one linear as
   | 11008 | 26.1 s | 1.7 s | 9.0 s |
 
   The hidden permutation was recovered exactly (accuracy 1.000) at every size in the correlated case. Scaling from 4096 to 11008 on the random matrix is about 9.3× for a 2.7× larger n, roughly n^2.3 in this range, far below the O(n³) worst case.
+- **[measured here]** At n = 11008 with weak matched-unit correlation estimated from 4096 tokens, the LAP took 1.7 s at ρ = 0.1 and 1.6 s at ρ = 0.2, recovering the permutation exactly in both cases. In the n = 1024 multi-way simulation (Q3), ρ = 0.09 estimated from only 1024 tokens gave 35% pairwise accuracy. The number of calibration tokens (estimation noise about 1/√T), not LAP cost, is the binding constraint.
 
 ### Inferences
 - **Cost is not the bottleneck for tying layers.** For a Llama-7B-class FFN (d_ff = 11008), one pairwise alignment costs seconds for the LAP plus seconds for the correlation matmul. Tying 12 layers to an anchor is about 11 LAPs, under 5 minutes on a laptop CPU, and far less on GPU for the correlation part. Weight-matching coordinate descent multiplies this by (number of permutation groups × iterations).
@@ -152,7 +153,7 @@ Pairwise alignment is a solved, cheap problem. Each permutation is one linear as
 
 ### Gaps
 - Exact Git Re-Basin wall-clock numbers and width-vs-barrier tables, Imfeld fusion accuracies, and ZipIt/MuDSC per-model tables were not retrievable (arXiv/OpenReview blocked).
-- My LAP timings are for synthetic matrices. Real FFN correlation matrices are lower-contrast, and LAP time tends to rise on less structured, near-random instances (26 s random vs 1.7 s structured at n = 11008).
+- My LAP timings are for synthetic matrices. Real FFN correlation matrices may lack a clean one-to-one structure, for example polysemantic or split features. Unstructured instances are slower (26 s random vs 1.6–1.7 s structured at n = 11008). Real matched-unit correlation levels between different-depth FFN layers of one LLM were not found in any retrieved source.
 
 ---
 
