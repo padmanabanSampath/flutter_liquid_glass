@@ -49,6 +49,7 @@ class SeaGlassFinish with Equatable {
     this.shadow = 0,
     this.elevation = 12,
     this.wobble = 0,
+    this.colorClarity = 0,
   });
 
   /// No sea glass: the regular liquid-glass face.
@@ -68,7 +69,8 @@ class SeaGlassFinish with Equatable {
       flecks = 0,
       shadow = 0,
       elevation = 12,
-      wobble = 0;
+      wobble = 0,
+      colorClarity = 0;
 
   /// A heavily tumbled, milkier pebble: more scatter, coarser grain and a
   /// brighter rim. Pair it with a larger [LiquidGlassSettings.frost].
@@ -88,7 +90,8 @@ class SeaGlassFinish with Equatable {
       flecks = 0,
       shadow = 0,
       elevation = 12,
-      wobble = 0;
+      wobble = 0,
+      colorClarity = 0;
 
   /// A barely tumbled shard that is still mostly clear.
   const SeaGlassFinish.clear()
@@ -107,7 +110,8 @@ class SeaGlassFinish with Equatable {
       flecks = 0,
       shadow = 0,
       elevation = 12,
-      wobble = 0;
+      wobble = 0,
+      colorClarity = 0;
 
   /// The milky, candy-like sea glass of the Sea Glass design concept: thick
   /// slabs of nearly opaque pastel glass flecked like terrazzo, brightest
@@ -133,7 +137,8 @@ class SeaGlassFinish with Equatable {
       flecks = 1,
       shadow = 1,
       elevation = 18,
-      wobble = 1.5;
+      wobble = 1.5,
+      colorClarity = 0;
 
   /// Restores a finish produced by [toJson].
   factory SeaGlassFinish.fromJson(Object? json) {
@@ -159,6 +164,7 @@ class SeaGlassFinish with Equatable {
       shadow: number('shadow', defaults.shadow),
       elevation: number('elevation', defaults.elevation),
       wobble: number('wobble', defaults.wobble),
+      colorClarity: number('colorClarity', defaults.colorClarity),
     );
   }
 
@@ -272,6 +278,16 @@ class SeaGlassFinish with Equatable {
   /// it; FakeGlass keeps the exact shape.
   final double wobble;
 
+  /// How much glass of a color clears: it scatters, frosts and pits the
+  /// backdrop less, so it shows and bends what is beneath while keeping its
+  /// color. Even at `1` it keeps a third of its milkiness and nearly half
+  /// its frost, so it still reads as frosted sea glass rather than tinted
+  /// film. Only glass of a color clears, and as much as it holds: frosted
+  /// white and colorless glass in the same layer keep their frost, and a
+  /// bridge between the two clears gradually. `0`, the default, renders
+  /// as before.
+  final double colorClarity;
+
   /// [strength] clamped to `0` to `1`.
   double get effectiveStrength => strength.clamp(0.0, 1.0);
 
@@ -321,6 +337,11 @@ class SeaGlassFinish with Equatable {
   /// disabled.
   double get effectiveWobble => isEnabled ? wobble.clamp(0.0, 4.0) : 0;
 
+  /// [colorClarity] clamped to `0` to `1`; `0` when the finish is
+  /// disabled.
+  double get effectiveColorClarity =>
+      isEnabled ? colorClarity.clamp(0.0, 1.0) : 0;
+
   /// Backdrop reach of the pitting, in logical pixels, that the layer must
   /// add to its capture; `0` when the finish is disabled.
   double get samplingReach => isEnabled ? effectivePitting : 0;
@@ -343,6 +364,7 @@ class SeaGlassFinish with Equatable {
     double? shadow,
     double? elevation,
     double? wobble,
+    double? colorClarity,
   }) => SeaGlassFinish(
     strength: strength ?? this.strength,
     depth: depth ?? this.depth,
@@ -360,6 +382,7 @@ class SeaGlassFinish with Equatable {
     shadow: shadow ?? this.shadow,
     elevation: elevation ?? this.elevation,
     wobble: wobble ?? this.wobble,
+    colorClarity: colorClarity ?? this.colorClarity,
   );
 
   /// A soft shadow tinted by the glass, as colored glass casts on a light
@@ -411,6 +434,7 @@ class SeaGlassFinish with Equatable {
     'shadow': shadow,
     'elevation': elevation,
     'wobble': wobble,
+    if (colorClarity != 0) 'colorClarity': colorClarity,
   };
 
   @override
@@ -431,6 +455,7 @@ class SeaGlassFinish with Equatable {
     shadow,
     elevation,
     wobble,
+    colorClarity,
   ];
 }
 

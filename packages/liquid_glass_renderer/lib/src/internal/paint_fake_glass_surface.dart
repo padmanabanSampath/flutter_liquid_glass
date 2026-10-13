@@ -126,7 +126,12 @@ Offset? fakeGlassLightPosition(
 
 /// The slab shading's light (see uSeaGlassLight in fake_glass_surface.frag):
 /// a positioned light relative to the surface's center.
-List<double> _lightUniforms(GlassLight light, Offset? position, Size size) {
+List<double> _lightUniforms(
+  GlassLight light,
+  Offset? position,
+  Size size, {
+  required double colorClarity,
+}) {
   final intensity = light.effectiveIntensity;
   final center = size.center(Offset.zero);
   return [
@@ -144,7 +149,8 @@ List<double> _lightUniforms(GlassLight light, Offset? position, Size size) {
     light.color.r * intensity,
     light.color.g * intensity,
     light.color.b * intensity,
-    0,
+    // The light color's fourth float: SeaGlassFinish.colorClarity.
+    colorClarity,
     light.ambient.r,
     light.ambient.g,
     light.ambient.b,
@@ -284,7 +290,14 @@ void paintFakeGlassSurface(
             seaGlass.effectiveGlow,
             seaGlass.effectiveFlecks,
           ])
-          ..setFloats(_lightUniforms(settings.light, lightPosition, size));
+          ..setFloats(
+            _lightUniforms(
+              settings.light,
+              lightPosition,
+              size,
+              colorClarity: settings.seaGlassFinish.effectiveColorClarity,
+            ),
+          );
       });
   final contourOutset = fakeGlassSurfaceOutset(settings);
   // A member also draws its half of the bridges, which reach up to half the

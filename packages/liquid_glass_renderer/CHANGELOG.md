@@ -76,6 +76,16 @@
 - **Slab sea glass example.** `example/lib/slab_sea_glass_main.dart`
   recreates the concept's component sheet, with daylight, dusk, a flashlight
   that follows the pointer and the four glass sets.
+- **Clear colored glass.** `SeaGlassFinish.colorClarity` clears glass of a
+  color: it scatters, frosts and pits the backdrop less, so it shows and
+  bends what is beneath while keeping its color. Frosted white and
+  colorless glass in the same layer keep their frost, and a blended bridge
+  clears gradually. Even at `1` the glass keeps some milkiness and frost, so
+  it still reads as sea glass. `0`, the default, renders as before.
+- **Flecks inside the glass.** Slab glass's terrazzo chips now sit inside
+  the glass rather than on it: their edges soften with their size, the
+  milky body veils them, they fade toward the thin rim, and they take tones
+  of the body color instead of grey and white.
 
 ### Performance
 

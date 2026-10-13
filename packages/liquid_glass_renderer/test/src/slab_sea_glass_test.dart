@@ -369,6 +369,104 @@ void main() {
     });
   });
 
+  group('SeaGlassFinish.colorClarity', () {
+    test('is off in every finish and survives JSON and copyWith', () {
+      for (final finish in const [
+        SeaGlassFinish(),
+        SeaGlassFinish.none(),
+        SeaGlassFinish.frosted(),
+        SeaGlassFinish.clear(),
+        SeaGlassFinish.slab(),
+      ]) {
+        expect(finish.colorClarity, 0);
+        expect(finish.toJson().containsKey('colorClarity'), isFalse);
+      }
+      final clear = const SeaGlassFinish().copyWith(colorClarity: .7);
+      expect(clear.colorClarity, .7);
+      expect(clear, isNot(const SeaGlassFinish()));
+      expect(SeaGlassFinish.fromJson(clear.toJson()), clear);
+      expect(
+        const SeaGlassFinish().copyWith(colorClarity: 3).effectiveColorClarity,
+        1,
+      );
+      expect(
+        const SeaGlassFinish.none()
+            .copyWith(colorClarity: 1)
+            .effectiveColorClarity,
+        0,
+      );
+    });
+
+    testWidgets(
+      'clears colored glass and leaves frosted white glass frosted',
+      (tester) async {
+        const colored = Rect.fromLTWH(14, 20, 100, 100);
+        const white = Rect.fromLTWH(126, 20, 100, 100);
+        // Stripes 12 logical pixels wide behind both tiles: how far apart
+        // the black and the white ones stay through the glass is how clear
+        // it is. Averaging many pixels cancels the frost's grain.
+        Future<List<int> Function(double, double)> render(double clarity) =>
+            _render(
+              tester,
+              _scene(
+                LiquidGlassSettings.seaGlass(
+                  finish: SeaGlassFinish(colorClarity: clarity),
+                  frost: 4,
+                ),
+                [
+                  _tile(rect: colored, color: const Color(0xFF1F7482)),
+                  _tile(rect: white, color: const Color(0x59E9F0EC)),
+                ],
+                backdrop: const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      end: Alignment(-.8, 0),
+                      colors: [Colors.black, Colors.black, Colors.white],
+                      stops: [0, .5, .5],
+                      tileMode: TileMode.repeated,
+                    ),
+                  ),
+                ),
+              ),
+            );
+        // The mean luminance of the white stripes' centers minus the black
+        // ones' inside [rect]; the stripes repeat every 24 pixels.
+        double contrast(List<int> Function(double, double) pixel, Rect rect) {
+          var black = 0.0;
+          var light = 0.0;
+          var count = 0;
+          for (var period = 24.0; period < 240; period += 24) {
+            final blackX = period + 6;
+            final whiteX = period + 18;
+            if (blackX - 3 < rect.left + 22 || whiteX + 3 > rect.right - 22) {
+              continue;
+            }
+            for (var y = rect.top + 34; y < rect.bottom - 34; y++) {
+              for (var dx = -2.0; dx <= 2; dx += .5) {
+                black += _luminance(pixel(blackX + dx, y));
+                light += _luminance(pixel(whiteX + dx, y));
+                count++;
+              }
+            }
+          }
+          return (light - black) / count;
+        }
+
+        final before = await render(0);
+        final after = await render(1);
+        expect(
+          contrast(after, colored),
+          greaterThan(contrast(before, colored) + 6),
+        );
+        expect(
+          (contrast(after, white) - contrast(before, white)).abs(),
+          lessThan(2),
+        );
+      },
+      skip: skipProperGlassTests,
+    );
+  });
+
   group('rendering', () {
     testWidgets(
       'light gathers on the side away from it',

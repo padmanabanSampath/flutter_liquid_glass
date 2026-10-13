@@ -131,6 +131,8 @@ float uSeaGlassGrain = clamp(uSeaGlassSurface.x, 0.0, 1.0);
 float uSeaGlassGrainSize = max(uSeaGlassSurface.y, 0.25);
 float uSeaGlassSparkle = clamp(uSeaGlassSurface.z, 0.0, 1.0);
 float uSeaGlassPitting = max(uSeaGlassSurface.w, 0.0);
+// SeaGlassFinish.colorClarity, in the light color's fourth component.
+float uSeaGlassColorClarity = clamp(uSeaGlassLightColor.w, 0.0, 1.0);
 
 // The fitted/default CA range is below the pixel response of the backdrop
 // sampler: the pinned three-scene scan found no score or decoded-image gain
@@ -741,6 +743,8 @@ vec3 seaGlassFace(
         slabEdgeScatter(inwardDistance, uSeaGlassDepth),
         shading
     );
+    // Colored glass clears (SeaGlassFinish.colorClarity).
+    scatter *= 1.0 - 0.7 * seaGlassColorClear(body, uSeaGlassColorClarity);
     transmitted = backdrop * transmittance * (1.0 - scatter);
     float ambient = mix(0.7, 1.0, clamp(backdropLuminance, 0.0, 1.0));
     vec3 glow = mix(vec3(1.0), transmittance, 0.6) * ambient;
@@ -1009,7 +1013,11 @@ void main() {
             seaGlassSecondWeight
         );
         displacement += seaGlassPitSample.xy * uSeaGlassPitting *
-            uSeaGlassStrength * appearanceVisibility;
+            uSeaGlassStrength * appearanceVisibility *
+            (1.0 - 0.45 * seaGlassColorClear(
+                materialTint,
+                uSeaGlassColorClarity
+            ));
     }
 
     vec2 invUSize = 1.0 / uSize;
@@ -1070,7 +1078,11 @@ void main() {
             // the mean of samples spread over a disc (a Vogel spiral, at a
             // random turn per pixel, anchored to the glass so the grain
             // moves with it). Like the bevel, it settles with visibility.
-            float radius = uSeaGlassFrostRadius * appearanceVisibility;
+            float radius = uSeaGlassFrostRadius * appearanceVisibility *
+                (1.0 - 0.55 * seaGlassColorClear(
+                    materialTint,
+                    uSeaGlassColorClarity
+                ));
             float turn = 6.2831853 * seaGlassHash(
                 floor(seaGlassFirst)
             );
@@ -1339,17 +1351,35 @@ void main() {
         surfaceNormal
     );
     if (uSeaGlassStrength > 0.0 && uSeaGlassGloss.w > 0.0) {
-        vec2 flecks = seaGlassFlecks(seaGlassFirst, uSeaGlassGrainSize, 0.75);
+        // The chips sit inside the glass, not on it: their edges soften
+        // with their size, the milky body veils them and they fade toward
+        // the thin rim (seaGlassFleckDepth), in tones of the body.
+        float fleckSoftness = max(0.75, uSeaGlassGrainSize * 0.35);
+        vec2 flecks = seaGlassFlecks(
+            seaGlassFirst,
+            uSeaGlassGrainSize,
+            fleckSoftness
+        );
         if (seaGlassSecondWeight > 0.001) {
             flecks = mix(
                 flecks,
-                seaGlassFlecks(seaGlassSecond, uSeaGlassGrainSize, 0.75),
+                seaGlassFlecks(
+                    seaGlassSecond,
+                    uSeaGlassGrainSize,
+                    fleckSoftness
+                ),
                 seaGlassSecondWeight
             );
         }
-        litColor = seaGlassFlecked(
+        float fleckDepth = seaGlassFleckDepth(
+            seaGlassThickness(max(signedEdgeDistance, 0.0), uSeaGlassDepth),
+            uSeaGlassScatter
+        );
+        litColor = seaGlassFleckedInside(
             litColor,
-            flecks * clamp(uSeaGlassGloss.w, 0.0, 1.0) * uSeaGlassStrength
+            materialTint,
+            flecks * clamp(uSeaGlassGloss.w, 0.0, 1.0) * uSeaGlassStrength *
+                fleckDepth
         );
     }
     if (uSeaGlassStrength > 0.0 && uSeaGlassSparkle > 0.0) {

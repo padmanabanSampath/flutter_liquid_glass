@@ -319,3 +319,40 @@ vec3 seaGlassFlecked(vec3 face, vec2 flecks) {
     face = mix(face, dark, clamp(flecks.x, 0.0, 1.0));
     return mix(face, mix(face, vec3(1.0), 0.35), clamp(flecks.y, 0.0, 1.0));
 }
+
+// The face with chips embedded in glass of tint (premultiplied body color,
+// alpha its density): dark chips a deeper tone of the body, light ones a
+// pale tint of it, rather than grey and white specks on the surface.
+vec3 seaGlassFleckedInside(vec3 face, vec4 tint, vec2 flecks) {
+    vec3 body = mix(
+        vec3(1.0),
+        clamp(tint.rgb, vec3(0.02), vec3(1.0)),
+        clamp(tint.a, 0.0, 1.0)
+    );
+    vec3 dark = face * mix(vec3(1.0), body, 0.55) * 0.84;
+    vec3 light = mix(face, mix(body, vec3(1.0), 0.65), 0.45);
+    face = mix(face, dark, clamp(flecks.x, 0.0, 1.0));
+    return mix(face, light, clamp(flecks.y, 0.0, 1.0));
+}
+
+// How deep inside the glass its chips show, from 0 to 1: the milky body
+// veils them as much as it scatters, and they fade where the glass thins
+// toward its rim, so they read as suspended inside the stone.
+float seaGlassFleckDepth(float thickness, float scatter) {
+    return mix(0.3, 1.0, clamp(thickness, 0.0, 1.0)) *
+        (1.0 - 0.45 * clamp(scatter, 0.0, 1.0));
+}
+
+// How much SeaGlassFinish.colorClarity clears glass of body tint, from 0
+// to clarity: glass of a color clears as much as it holds (its alpha), so
+// frosted white and colorless glass keep their frost, and a blended bridge
+// clears gradually with its color.
+float seaGlassColorClear(vec4 tint, float clarity) {
+    if (clarity <= 0.0) {
+        return 0.0;
+    }
+    vec3 c = clamp(tint.rgb, vec3(0.0), vec3(1.0));
+    float high = max(max(c.r, c.g), c.b);
+    float chroma = (high - min(min(c.r, c.g), c.b)) / max(high, 0.001);
+    return clarity * smoothstep(0.04, 0.3, chroma) * clamp(tint.a, 0.0, 1.0);
+}

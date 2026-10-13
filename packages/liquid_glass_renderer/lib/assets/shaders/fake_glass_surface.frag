@@ -122,6 +122,11 @@ vec3 seaGlassWhiteFace(
       0.0,
       1.0
   );
+  // Colored glass clears (SeaGlassFinish.colorClarity).
+  scatter *= 1.0 - 0.7 * seaGlassColorClear(
+      gSeaGlassColor,
+      clamp(uSeaGlassLightColor.w, 0.0, 1.0)
+  );
   vec3 glow = mix(vec3(1.0), transmittance, 0.6);
   return transmittance * (1.0 - scatter) + glow * scatter;
 }
@@ -232,7 +237,10 @@ vec4 seaGlassOverlay(vec2 position, float inward, float facing, vec2 normal) {
         uSeaGlassBody.z * sizeResponse.y * mix(1.6, 1.0, thickness),
         0.0,
         1.0
-    );
+    ) * (1.0 - 0.7 * seaGlassColorClear(
+        gSeaGlassColor,
+        clamp(uSeaGlassLightColor.w, 0.0, 1.0)
+    ));
     overlay = overlay + seaGlassSlab(position, inward, normal, scatter) *
         (1.0 - overlay.a);
   }
@@ -250,8 +258,15 @@ vec4 seaGlassOverlay(vec2 position, float inward, float facing, vec2 normal) {
   if (fleckAmount > 0.0) {
     // The overlay cannot read the face below it, so the dark chips take the
     // slab's deeper tone of the body, as the final render shader's do.
-    vec2 flecks = seaGlassFlecks(position, grainSize, uPixelSize) *
-        fleckAmount;
+    // Inside the glass, as the final render shader's: soft edges, veiled
+    // by the milky body and fading toward the thin rim.
+    vec2 flecks = seaGlassFlecks(
+        position,
+        grainSize,
+        max(uPixelSize, grainSize * 0.35)
+    ) *
+        fleckAmount *
+        seaGlassFleckDepth(thickness, uSeaGlassBody.z);
     vec3 body = mix(
         vec3(1.0),
         bodyColor,
@@ -259,7 +274,7 @@ vec4 seaGlassOverlay(vec2 position, float inward, float facing, vec2 normal) {
     );
     vec3 dark = seaGlassFlecked(body, vec2(1.0, 0.0));
     overlay = vec4(dark * flecks.x, flecks.x) + overlay * (1.0 - flecks.x);
-    float light = 0.35 * flecks.y;
+    float light = 0.28 * flecks.y;
     overlay = vec4(vec3(light), light) + overlay * (1.0 - light);
   }
 

@@ -723,7 +723,9 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
         color.r * intensity,
         color.g * intensity,
         color.b * intensity,
-        0,
+        // Float index 307, the light color's fourth: SeaGlassFinish.
+        // colorClarity.
+        settings.seaGlassFinish.effectiveColorClarity,
         ambient.r,
         ambient.g,
         ambient.b,
