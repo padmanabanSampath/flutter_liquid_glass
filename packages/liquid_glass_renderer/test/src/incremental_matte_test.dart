@@ -149,7 +149,8 @@ void main() {
       int width = 640,
       int height = 480,
       double groupBlend = 30,
-      bool updates = true,
+      // Whether the render must be incremental; null checks pixels only.
+      bool? updates = true,
     }) async {
       final count = incremental.debugIncrementalRenderCount;
       final updated = render(
@@ -193,6 +194,7 @@ void main() {
         }
       }
       expect(differing, 0, reason: 'pixels differing from a full render');
+      if (updates == null) return;
       if (updates) {
         expect(
           incremental.debugIncrementalRenderCount,
@@ -249,6 +251,67 @@ void main() {
       for (final time in [0.25, 0.5, 1.5]) {
         await expectSameAsFullRender(renderer, at(time));
         expect(renderer.debugLastRedrawnPixels, lessThan(640 * 480 * 0.2));
+      }
+    });
+
+    test('many shapes springing out at once match full renders', () async {
+      final renderer = await FlutterGpuGeometryRenderer.fromAsset(_bundle);
+      addTearDown(renderer.dispose);
+      // A floating action button and its menu items, which grow out of it
+      // and move up together, as an expanding menu does.
+      _Scene at(double t) => [
+        (const _Shape(3, 560, 420, 64, 64, radius: 20), -1.0),
+        for (var i = 0; i < 5; i++)
+          (
+            _Shape(
+              3,
+              560 - 40 * t,
+              420 - (i + 1) * 62 * t,
+              24 + 96 * t,
+              20 + 26 * t,
+              radius: 14,
+            ),
+            -1.0,
+          ),
+      ];
+      // The layer's matte covers the shapes' union, in whole pixels, so it
+      // moves and resizes with them.
+      ({double x, double y, int width, int height}) matteOf(_Scene scene) {
+        var left = double.infinity;
+        var top = double.infinity;
+        var right = -double.infinity;
+        var bottom = -double.infinity;
+        for (final (shape, _) in scene) {
+          left = math.min(left, shape.x - shape.width / 2 - 8);
+          top = math.min(top, shape.y - shape.height / 2 - 8);
+          right = math.max(right, shape.x + shape.width / 2 + 8);
+          bottom = math.max(bottom, shape.y + shape.height / 2 + 8);
+        }
+        final x = left.floorToDouble();
+        final y = top.floorToDouble();
+        return (
+          x: x,
+          y: y,
+          width: (right - x).ceil(),
+          height: (bottom - y).ceil(),
+        );
+      }
+
+      for (final scene in [
+        for (final t in [0.0, 0.1, 0.25, 0.45, 0.7, 0.9, 1.0, 0.8, 0.4, 0.05])
+          at(t),
+      ]) {
+        // Shapes stay in layer pixels; the matte starts at its offset.
+        final matte = matteOf(scene);
+        await expectSameAsFullRender(
+          renderer,
+          scene,
+          offsetX: matte.x,
+          offsetY: matte.y,
+          width: matte.width,
+          height: matte.height,
+          updates: null,
+        );
       }
     });
 
@@ -320,6 +383,75 @@ void main() {
         groupBlend: 18,
         offsetX: 0.5,
         updates: false,
+      );
+    });
+
+    testWidgets('uniforms outlive frames the GPU has yet to run', (
+      tester,
+    ) async {
+      // The shared host buffer cycles through four slots, one per frame. A
+      // slot the GPU has not read yet must not be rewound into: the passes
+      // would draw a later frame's shapes, and the next update would keep
+      // them. In widget tests completions arrive only when the test yields
+      // to the event loop, so these frames run ahead of the GPU.
+      final renderer = (await tester.runAsync(
+        () => FlutterGpuGeometryRenderer.fromAsset(_bundle),
+      ))!;
+      addTearDown(renderer.dispose);
+      final full = (await tester.runAsync(
+        () => FlutterGpuGeometryRenderer.fromAsset(_bundle),
+      ))!;
+      addTearDown(full.dispose);
+
+      final deferred =
+          FlutterGpuGeometryRenderer.debugDeferredHostBufferResetCount;
+      var scene = base;
+      Future<void> nextFrame() {
+        tester.binding.scheduleFrame();
+        return tester.pump(const Duration(milliseconds: 16));
+      }
+
+      for (var frame = 0; frame < 8; frame++) {
+        await nextFrame();
+        scene = [...scene];
+        scene[frame % 4 + 1] = (
+          scene[frame % 4 + 1].$1.moved(3, frame.isEven ? 2 : -2),
+          scene[frame % 4 + 1].$2,
+        );
+        render(renderer, scene);
+      }
+      expect(
+        FlutterGpuGeometryRenderer.debugDeferredHostBufferResetCount,
+        greaterThan(deferred),
+        reason: 'frames ahead of the GPU keep their slot',
+      );
+      render(full, scene);
+      final a = (await tester.runAsync(() => _bytes(renderer)))!;
+      final b = (await tester.runAsync(() => _bytes(full)))!;
+      expect(a.stride, b.stride);
+      var differing = 0;
+      for (var i = 0; i < a.data.lengthInBytes; i += 4) {
+        if (a.data.getUint32(i) != b.data.getUint32(i)) differing++;
+      }
+      expect(differing, 0, reason: 'pixels differing from a full render');
+
+      // Once the GPU has caught up, the next frame rewinds again.
+      for (var i = 0; i < 200; i++) {
+        if (FlutterGpuGeometryRenderer.debugPendingHostBufferReaders == 0) {
+          break;
+        }
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)),
+        );
+      }
+      expect(FlutterGpuGeometryRenderer.debugPendingHostBufferReaders, 0);
+      final stalled =
+          FlutterGpuGeometryRenderer.debugDeferredHostBufferResetCount;
+      await nextFrame();
+      render(renderer, scene);
+      expect(
+        FlutterGpuGeometryRenderer.debugDeferredHostBufferResetCount,
+        stalled,
       );
     });
 

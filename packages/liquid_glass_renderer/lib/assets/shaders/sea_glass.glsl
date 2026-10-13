@@ -105,3 +105,217 @@ float seaGlassThickness(float inwardDistance, float depth) {
     float x = clamp(inwardDistance / max(depth, 0.001), 0.0, 1.0);
     return x * (2.0 - x);
 }
+
+// MARK: Slab shading (SeaGlassFinish.shading, glow)
+
+// How the light shades a thick slab of milky glass. The body color shows
+// where the slab is thickest, just inside its center toward the light. The
+// light that goes through brightens the slab where it is thin, along the
+// outline except on the wall facing the light, and most where it gathers,
+// on the far side (glow); the half facing the light also reflects a little
+// white. x is the brightening, a factor on the body; y the share of white.
+//   q:      position in the shape's box, -1..1 per axis
+//   toward: unit direction toward the light in the shape's frame
+//   rim:    how much the outline here faces the light, -1..1
+//   edge:   inward distance from the outline over the slab's depth
+//   tilt:   how much the light's direction shades the slab, 0..1; a light
+//           right above a shape lights it evenly
+vec2 slabShading(
+    vec2 q,
+    vec2 toward,
+    float rim,
+    float edge,
+    float tilt,
+    float glow
+) {
+    float across = clamp(dot(q, toward), -1.0, 1.0) * tilt;
+    float thin = (1.0 - smoothstep(0.0, 1.4, edge)) *
+        mix(1.0, 0.1, smoothstep(0.0, 1.0, rim * tilt));
+    float far = smoothstep(-0.05, 1.0, -across);
+    // The reflection fades again toward the outline facing the light.
+    float near = smoothstep(0.2, 0.65, across) *
+        (1.0 - smoothstep(0.75, 1.0, across));
+    return vec2(max(0.1 * thin, 0.17 * glow * far), 0.15 * near);
+}
+
+// The slab's color under shading (slabShading). Light added to the body
+// saturates its strongest channels first, so a blue slab glows toward cyan
+// and white.
+vec3 slabColor(vec3 body, vec2 shading) {
+    vec3 lit = min(body * (1.0 + shading.x), vec3(1.0));
+    return mix(lit, vec3(1.0), shading.y);
+}
+
+// The share of its scatter a slab keeps at inward distance from its
+// outline, for a slab of the given depth: the thin edge is clear glass, so
+// the backdrop shows through it, tinted and bent by the lens, and the milk
+// sets in a little inside.
+float slabEdgeScatter(float inward, float depth) {
+    return mix(0.25, 1.0, smoothstep(0.0, 0.35 * depth, inward));
+}
+
+// The direction a slab's shading comes from, given the unit direction
+// toward the light: the face also reflects the sky above the screen, so
+// under daylight it is shaded from a little higher up than the light alone.
+vec2 slabShadeDirection(vec2 towardLight, bool positioned) {
+    vec2 shade = towardLight + vec2(0.0, positioned ? 0.0 : -0.3);
+    return shade / max(length(shade), 1e-6);
+}
+
+// MARK: Flecks (SeaGlassFinish.flecks)
+
+// Signed distance from uv to the edge from a to b of a shard wound
+// counterclockwise, positive inside.
+highp float seaGlassShardEdge(highp vec2 uv, highp vec2 a, highp vec2 b) {
+    highp vec2 e = b - a;
+    return dot(uv - a, vec2(-e.y, e.x)) / max(length(e), 1e-6);
+}
+
+// The corner of a shard about a quarter turn k past its first, turned a
+// little further at random, at a random distance up to size from its
+// middle. The turn is small, so its sine and cosine are approximated.
+highp vec2 seaGlassShardCorner(
+    highp vec2 cell,
+    highp float k,
+    highp float size
+) {
+    highp float jitter =
+        0.55 * (2.0 * seaGlassHash(cell + vec2(17.3 * k, 5.1)) - 1.0);
+    highp vec2 turned = vec2(1.0 - 0.5 * jitter * jitter, jitter);
+    highp vec2 corner = k < 0.5
+        ? turned
+        : k < 1.5
+        ? vec2(-turned.y, turned.x)
+        : k < 2.5
+        ? -turned
+        : vec2(turned.y, -turned.x);
+    return corner * size *
+        mix(0.45, 1.0, seaGlassHash(cell + vec2(3.9, 23.7 * k + 1.0)));
+}
+
+// The shard of cell home of a terrazzo layer at p, if the cell holds one
+// (see seaGlassChip): its coverage, antialiased over aa units.
+highp float seaGlassShard(
+    highp vec2 p,
+    highp vec2 home,
+    highp float cellSize,
+    highp vec2 seed,
+    highp float density,
+    highp float minSize,
+    highp float maxSize,
+    highp float aa
+) {
+    highp vec2 cell = home + seed;
+    if (seaGlassHash(cell) >= density) {
+        return 0.0;
+    }
+    highp vec2 center = (home + vec2(0.15) + 0.7 * vec2(
+        seaGlassHash(cell + vec2(3.7, 91.1)),
+        seaGlassHash(cell + vec2(57.9, 8.3))
+    )) * cellSize;
+    highp vec2 axis = normalize(vec2(
+        seaGlassHash(cell + vec2(13.1, 47.7)) - 0.5,
+        seaGlassHash(cell + vec2(47.7, 13.1)) - 0.5
+    ) + vec2(1e-3, 0.0));
+    highp vec2 d = p - center;
+    highp float stretch = mix(1.0, 2.2, seaGlassHash(cell + vec2(7.7, 63.1)));
+    highp vec2 uv = vec2(dot(d, axis), dot(d, vec2(-axis.y, axis.x)) * stretch);
+    highp float size = cellSize *
+        mix(minSize, maxSize, seaGlassHash(cell + vec2(29.3, 5.9)));
+    highp vec2 c0 = seaGlassShardCorner(cell, 0.0, size);
+    highp vec2 c1 = seaGlassShardCorner(cell, 1.0, size);
+    highp vec2 c2 = seaGlassShardCorner(cell, 2.0, size);
+    highp vec2 c3 = seaGlassShardCorner(cell, 3.0, size);
+    highp float inside = min(
+        min(seaGlassShardEdge(uv, c0, c1), seaGlassShardEdge(uv, c1, c2)),
+        min(seaGlassShardEdge(uv, c2, c3), seaGlassShardEdge(uv, c3, c0))
+    );
+    // The stretch scales distances across the shard by up to its factor.
+    return clamp(inside / (max(aa, 1e-4) * stretch) + 0.5, 0.0, 1.0);
+}
+
+// One layer of terrazzo chips: in a share density of the cells, an angular
+// shard (four random corners, some nearly a triangle) of random size,
+// stretch and turn, anywhere in its cell. A shard reaches at most 0.15 of a
+// cell past its border, so p only looks up its own cell and the three
+// nearest neighbors. Sizes run from minSize to maxSize times the cell size,
+// at most 0.3. Returns the coverage at p, antialiased over aa units.
+highp float seaGlassChip(
+    highp vec2 p,
+    highp float cellSize,
+    highp vec2 seed,
+    highp float density,
+    highp float minSize,
+    highp float maxSize,
+    highp float aa
+) {
+    highp vec2 q = p / cellSize;
+    highp vec2 home = floor(q);
+    highp vec2 side = sign(q - home - vec2(0.5));
+    return max(
+        max(
+            seaGlassShard(p, home, cellSize, seed, density, minSize, maxSize, aa),
+            seaGlassShard(
+                p,
+                home + vec2(side.x, 0.0),
+                cellSize,
+                seed,
+                density,
+                minSize,
+                maxSize,
+                aa
+            )
+        ),
+        max(
+            seaGlassShard(
+                p,
+                home + vec2(0.0, side.y),
+                cellSize,
+                seed,
+                density,
+                minSize,
+                maxSize,
+                aa
+            ),
+            seaGlassShard(
+                p,
+                home + side,
+                cellSize,
+                seed,
+                density,
+                minSize,
+                maxSize,
+                aa
+            )
+        )
+    );
+}
+
+// The chips at p for grains grainSize across: x the dark ones, deeper bits
+// of the body, and y the light ones, whitish crumbs.
+highp vec2 seaGlassFlecks(
+    highp vec2 p,
+    highp float grainSize,
+    highp float aa
+) {
+    return vec2(
+        seaGlassChip(p, grainSize * 3.1, vec2(0.0), 0.7, 0.18, 0.3, aa),
+        seaGlassChip(
+            p + vec2(0.37, 0.71) * grainSize,
+            grainSize * 3.6,
+            vec2(113.0, 271.0),
+            0.7,
+            0.15,
+            0.3,
+            aa
+        )
+    );
+}
+
+// The face with flecks of coverage flecks (seaGlassFlecks) over it.
+vec3 seaGlassFlecked(vec3 face, vec2 flecks) {
+    float luminance = dot(face, vec3(0.2126, 0.7152, 0.0722));
+    vec3 dark = mix(vec3(luminance), face, 0.8) * 0.9;
+    face = mix(face, dark, clamp(flecks.x, 0.0, 1.0));
+    return mix(face, mix(face, vec3(1.0), 0.35), clamp(flecks.y, 0.0, 1.0));
+}

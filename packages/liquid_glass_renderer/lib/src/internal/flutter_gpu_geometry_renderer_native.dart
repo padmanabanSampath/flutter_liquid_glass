@@ -40,6 +40,7 @@ class FlutterGpuGeometryRenderer {
     _offsetUTextureSize = resources.offsetUTextureSize;
     _offsetOpticalProps = resources.offsetOpticalProps;
     _offsetContourProps = resources.offsetContourProps;
+    _offsetWobble = resources.offsetWobble;
     _offsetShapeData = resources.offsetShapeData;
     _offsetRseData = resources.offsetRseData;
     _offsetShapeTints = resources.offsetShapeTints;
@@ -164,6 +165,13 @@ class FlutterGpuGeometryRenderer {
   static int _sharedHostBufferBlockLength = 0;
   static Duration? _sharedHostBufferFrame;
 
+  /// The host buffer's frame slot that emplacements currently go into.
+  static int _hostBufferSlot = 0;
+
+  /// Command buffers per host buffer frame slot that read its uniforms and
+  /// have not completed on the GPU.
+  static List<int> _pendingPerSlot = const [];
+
   static const int _hostBufferSlotsPerFrame = 32;
 
   // These ownership counters exclude clones held by callers and native
@@ -195,21 +203,50 @@ class FlutterGpuGeometryRenderer {
     final blockLength = alignedSize * _hostBufferSlotsPerFrame;
     if (_sharedHostBuffer == null ||
         _sharedHostBufferBlockLength < blockLength) {
-      _sharedHostBuffer = gpu.gpuContext.createHostBuffer(
+      // Command buffers in flight keep the old buffer's blocks alive.
+      final hostBuffer = _sharedHostBuffer = gpu.gpuContext.createHostBuffer(
         blockLengthInBytes: blockLength,
       );
       _sharedHostBufferBlockLength = blockLength;
+      _hostBufferSlot = 0;
+      _pendingPerSlot = List.filled(hostBuffer.frameCount, 0);
     }
     // This is also defined for direct renderer callers outside
     // handleDrawFrame while still advancing once per engine frame in
     // production.
     final timestamp = SchedulerBinding.instance.currentSystemFrameTimeStamp;
     if (_sharedHostBufferFrame != timestamp) {
-      _sharedHostBuffer!.reset();
-      _sharedHostBufferFrame = timestamp;
+      // A reset rewinds into the slot used frameCount resets ago, and
+      // emplacements overwrite its blocks from the CPU right away. While
+      // the GPU still has to read them, emplacements keep appending to the
+      // current slot, and the next call tries again. An overwritten pass
+      // would draw another frame's shapes, which an incremental update then
+      // keeps.
+      final next = (_hostBufferSlot + 1) % _pendingPerSlot.length;
+      if (_pendingPerSlot[next] == 0) {
+        _sharedHostBuffer!.reset();
+        _hostBufferSlot = next;
+        _sharedHostBufferFrame = timestamp;
+      } else {
+        assert(() {
+          debugDeferredHostBufferResetCount++;
+          return true;
+        }(), 'Count deferred host buffer resets in debug builds.');
+      }
     }
     return _sharedHostBuffer!;
   }
+
+  /// Host buffer resets put off because the GPU had not finished with the
+  /// slot they would rewind into.
+  @visibleForTesting
+  static int debugDeferredHostBufferResetCount = 0;
+
+  /// Command buffers that read the shared host buffer and have not
+  /// completed on the GPU.
+  @visibleForTesting
+  static int get debugPendingHostBufferReaders =>
+      _pendingPerSlot.fold(0, (sum, count) => sum + count);
 
   late final gpu.RenderPipeline _pipeline;
   late final gpu.RenderPipeline _materialGradientPipeline;
@@ -244,6 +281,7 @@ class FlutterGpuGeometryRenderer {
   late final int _offsetUTextureSize;
   late final int _offsetOpticalProps;
   late final int _offsetContourProps;
+  late final int _offsetWobble;
   late final int _offsetShapeData;
   late final int _offsetRseData;
   late final int _offsetShapeTints;
@@ -306,6 +344,7 @@ class FlutterGpuGeometryRenderer {
     List<double> appearanceData = const <double>[],
     List<double> rseData = const <double>[],
     List<double> boundsData = const <double>[],
+    double wobble = 0,
   }) {
     assert(() {
       debugRenderCount++;
@@ -353,6 +392,7 @@ class FlutterGpuGeometryRenderer {
       rseData: rseData,
       appearanceData: appearanceData,
       boundsData: boundsData,
+      wobble: wobble,
     );
 
     // Most renders change a few shapes. The matte they leave is copied and
@@ -555,11 +595,13 @@ class FlutterGpuGeometryRenderer {
       return true;
     }
 
-    // Optics, shape count and contour extent, which every pixel depends on.
+    // Optics, shape count, contour extent and wobble, which every pixel
+    // depends on.
     final contourIndex = _offsetContourProps ~/ 4;
     if (!same(_offsetUTextureSize ~/ 4, 2) ||
         !same(_offsetOpticalProps ~/ 4, 4) ||
-        old[contourIndex] != now[contourIndex]) {
+        old[contourIndex] != now[contourIndex] ||
+        old[_offsetWobble ~/ 4] != now[_offsetWobble ~/ 4]) {
       return null;
     }
     final offsetIndex = _offsetUOffset ~/ 4;
@@ -746,7 +788,7 @@ class FlutterGpuGeometryRenderer {
   //
   // Share a command buffer across passes only once the engine ends a pass
   // before the next begins.
-  static final List<gpu.CommandBuffer> _pendingCommandBuffers = [];
+  static final List<_TrackedCommandBuffer> _pendingCommandBuffers = [];
   static bool _postFrameFlushScheduled = false;
 
   /// Command buffers submitted by [flushPendingSubmissions].
@@ -769,18 +811,27 @@ class FlutterGpuGeometryRenderer {
       SchedulerPhase.persistentCallbacks;
 
   static void _submitOrDefer(gpu.CommandBuffer commandBuffer) {
+    // The command buffer reads uniforms from the current host buffer slot,
+    // which must not be reset into until the GPU has run it.
+    final slot = _hostBufferSlot;
+    final pending = _pendingPerSlot;
+    pending[slot]++;
+    final tracked = _TrackedCommandBuffer(commandBuffer, () {
+      // A host buffer replaced since keeps its own blocks.
+      if (identical(pending, _pendingPerSlot)) pending[slot]--;
+    });
     if (!_deferring) {
       // An incremental update copies the previous matte, whose pass may
       // still be deferred: submit that first so the queue keeps their order.
       flushPendingSubmissions();
-      commandBuffer.submit();
+      tracked.submit();
       return;
     }
     assert(() {
       debugDeferredPassCount++;
       return true;
     }(), 'Count deferred geometry passes in debug builds.');
-    _pendingCommandBuffers.add(commandBuffer);
+    _pendingCommandBuffers.add(tracked);
     if (_postFrameFlushScheduled) return;
     _postFrameFlushScheduled = true;
     // Covers passes whose layer was painted but not composited.
@@ -954,8 +1005,10 @@ class FlutterGpuGeometryRenderer {
     required List<double> rseData,
     required List<double> appearanceData,
     required List<double> boundsData,
+    required double wobble,
   }) {
     final floatData = _uniformData.buffer.asFloat32List();
+    floatData[_offsetWobble ~/ 4] = math.max(0, wobble);
 
     final uOffsetIndex = _offsetUOffset ~/ 4;
     floatData[uOffsetIndex] = offsetX;
@@ -1260,6 +1313,7 @@ class _SharedGeometryResources {
     offsetShapeResponses =
         uniformSlot.getMemberOffsetInBytes('uShapeResponses') ?? 0;
     offsetShapeBounds = uniformSlot.getMemberOffsetInBytes('uShapeBounds') ?? 0;
+    offsetWobble = uniformSlot.getMemberOffsetInBytes('uWobble') ?? 0;
     final vertices = Float32List.fromList([
       -1.0, -1.0, 0.0, 0.0, //
       1.0, -1.0, 1.0, 0.0, //
@@ -1294,6 +1348,7 @@ class _SharedGeometryResources {
   late final int offsetShapeTints;
   late final int offsetShapeResponses;
   late final int offsetShapeBounds;
+  late final int offsetWobble;
   late final gpu.DeviceBuffer vertexBuffer;
   late final gpu.BufferView vertexBufferView;
 }
@@ -1305,6 +1360,31 @@ typedef _DrawnMatte = ({
   int height,
   Float32List uniforms,
 });
+
+/// A command buffer that reports when the GPU has run it.
+final class _TrackedCommandBuffer {
+  _TrackedCommandBuffer(this._commandBuffer, this._onDone);
+
+  final gpu.CommandBuffer _commandBuffer;
+  final void Function() _onDone;
+  bool _done = false;
+
+  void submit() {
+    try {
+      // Completion is posted to the UI thread, failed or not.
+      _commandBuffer.submit(completionCallback: (_) => _finish());
+    } catch (_) {
+      _finish();
+      rethrow;
+    }
+  }
+
+  void _finish() {
+    if (_done) return;
+    _done = true;
+    _onDone();
+  }
+}
 
 /// How a render brings the previous matte up to date: copy it, moved by
 /// whole pixels, and draw [rects] again.

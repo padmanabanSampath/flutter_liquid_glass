@@ -345,9 +345,12 @@ class _LiquidGlassState extends State<LiquidGlass> {
       layerShadows: scope.consolidatesFakeBackdrop || blendGroupLink != null
           ? widget.shadows
           : const [],
+      layerCastsShadow:
+          scope.consolidatesFakeBackdrop || blendGroupLink != null,
       child: registeredChild,
     );
-    if (widget.shadows.isEmpty ||
+    if ((widget.shadows.isEmpty &&
+            settings.seaGlassFinish.effectiveShadow <= 0) ||
         blendGroupLink != null ||
         scope.consolidatesFakeBackdrop) {
       return content;
@@ -355,6 +358,7 @@ class _LiquidGlassState extends State<LiquidGlass> {
     return GlassShadow(
       settings: settings,
       appearanceVisibility: appearance.visibility,
+      body: appearance.tint,
       shape: widget.shape,
       shadows: widget.shadows,
       child: content,
@@ -373,6 +377,7 @@ class _RawLiquidGlass extends SingleChildRenderObjectWidget {
     required super.child,
     required this.shape,
     required this.layerShadows,
+    required this.layerCastsShadow,
     required this.blendGroupLink,
     required this.renderLink,
     required this.settings,
@@ -383,6 +388,8 @@ class _RawLiquidGlass extends SingleChildRenderObjectWidget {
   final LiquidShape shape;
 
   final List<BoxShadow> layerShadows;
+
+  final bool layerCastsShadow;
 
   final GlassGroupLink? blendGroupLink;
 
@@ -399,6 +406,7 @@ class _RawLiquidGlass extends SingleChildRenderObjectWidget {
     return RenderLiquidGlass(
       shape: shape,
       layerShadows: layerShadows,
+      layerCastsShadow: layerCastsShadow,
       blendGroupLink: blendGroupLink,
       renderLink: renderLink,
       settings: settings,
@@ -415,6 +423,7 @@ class _RawLiquidGlass extends SingleChildRenderObjectWidget {
     renderObject
       ..shape = shape
       ..layerShadows = layerShadows
+      ..layerCastsShadow = layerCastsShadow
       ..settings = settings
       ..appearance = appearance
       ..devicePixelRatio = devicePixelRatio
@@ -431,6 +440,7 @@ class RenderLiquidGlass extends RenderLiquidGlassGeometry
   RenderLiquidGlass({
     required this._shape,
     required this._layerShadows,
+    required this._layerCastsShadow,
     required super.settings,
     required this._appearance,
     required super.devicePixelRatio,
@@ -467,6 +477,16 @@ class RenderLiquidGlass extends RenderLiquidGlassGeometry
   set layerShadows(List<BoxShadow> value) {
     if (_layerShadows == value) return;
     _layerShadows = value;
+    _blendGroupLink?.notifyShapeLayoutChanged(this);
+    markNeedsPaint();
+  }
+
+  bool _layerCastsShadow;
+  @override
+  bool get layerCastsShadow => _layerCastsShadow;
+  set layerCastsShadow(bool value) {
+    if (_layerCastsShadow == value) return;
+    _layerCastsShadow = value;
     _blendGroupLink?.notifyShapeLayoutChanged(this);
     markNeedsPaint();
   }

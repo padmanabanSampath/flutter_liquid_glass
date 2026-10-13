@@ -181,12 +181,17 @@ class FakeGlass extends StatelessWidget {
           : 0,
       child: fake,
     );
-    if (shadows.isEmpty) return clipped;
+    // A layer that serves this shape's backdrop also draws its shadows.
+    final castsShadow =
+        !backdropHandledByLayer && settings.seaGlassFinish.effectiveShadow > 0;
+    if (shadows.isEmpty && !castsShadow) return clipped;
     return GlassShadow(
       shape: shape,
       shadows: shadows,
       settings: settings,
       appearanceVisibility: appearance.visibility,
+      body: appearance.tint,
+      castsShadow: castsShadow,
       child: clipped,
     );
   }
@@ -567,6 +572,7 @@ class RenderFakeGlass extends RenderProxyBox {
       settings: settings,
       appearance: appearance,
       devicePixelRatio: devicePixelRatio,
+      lightPosition: fakeGlassLightPosition(settings, this),
     );
     canvas.restore();
   }

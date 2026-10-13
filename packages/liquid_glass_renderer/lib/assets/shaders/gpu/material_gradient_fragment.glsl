@@ -21,6 +21,9 @@ layout(std140) uniform GeometryUniforms {
     vec4 uShapeTints[MAX_SHAPES];
     vec4 uShapeResponses[MAX_SHAPES];
     vec4 uShapeBounds[MAX_SHAPES];
+    // x: how far, in matte pixels, outlines sink inward in undulations
+    // (SeaGlassFinish.wobble); yzw unused.
+    vec4 uWobble;
 } geometryUniforms;
 
 #define uOffset geometryUniforms.uOffset

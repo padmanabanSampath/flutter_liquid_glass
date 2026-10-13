@@ -686,11 +686,50 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
     // Float index 295, after the shape frames: the scattered frost radius.
     shader
       ..setFloat(295, _scatteredFrostRadius * devicePixelRatio)
-      // Float index 296, after the frost radius: the sea glass gloss.
+      // Float index 296, after the frost radius: the sea glass gloss, slab
+      // shading, glow and flecks.
       ..setFloat(296, seaGlass.effectiveGloss)
-      ..setFloat(297, 0)
-      ..setFloat(298, 0)
-      ..setFloat(299, 0);
+      ..setFloat(297, seaGlass.effectiveShading)
+      ..setFloat(298, seaGlass.effectiveGlow)
+      ..setFloat(299, seaGlass.effectiveFlecks);
+    _writeLightUniforms(shader);
+  }
+
+  /// Float index 300, after the gloss: the light of the slab shading, in
+  /// matte device pixels. A positioned light is global, so it maps into the
+  /// layer at paint time.
+  void _writeLightUniforms(FragmentShader shader) {
+    final light = settings.light;
+    final position = light.position;
+    final inLayer = position != null && attached
+        ? globalToLocal(position)
+        : null;
+    final ambient = light.ambient;
+    final color = light.color;
+    final intensity = light.effectiveIntensity;
+    shader.setFloatUniforms(initialIndex: 300, (value) {
+      value.setFloats([
+        if (inLayer != null) ...[
+          inLayer.dx * devicePixelRatio,
+          inLayer.dy * devicePixelRatio,
+          light.effectiveHeight * devicePixelRatio,
+          (light.reach ?? 0) * devicePixelRatio,
+        ] else ...[
+          0,
+          0,
+          0,
+          0,
+        ],
+        color.r * intensity,
+        color.g * intensity,
+        color.b * intensity,
+        0,
+        ambient.r,
+        ambient.g,
+        ambient.b,
+        0,
+      ]);
+    });
   }
 
   /// Largest frost, in device pixels, folded into the final pass instead of
@@ -820,7 +859,9 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
         old.effectiveRefractionHeight != settings.effectiveRefractionHeight ||
         old.effectiveRefractionAmount != settings.effectiveRefractionAmount ||
         old.refractionFitsShape != settings.refractionFitsShape ||
-        old.contourWidth != settings.contourWidth;
+        old.contourWidth != settings.contourWidth ||
+        old.seaGlassFinish.effectiveWobble !=
+            settings.seaGlassFinish.effectiveWobble;
     _updateShaderSettings();
     if (geometryInputsChanged) needsGeometryUpdate = true;
   }
@@ -1100,6 +1141,7 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
   void _bindGeometryShader(ui.Image geometryImage) {
     syncCoordinateMapping();
     final activeRenderShader = renderShader;
+    _writeLightUniforms(activeRenderShader);
     activeRenderShader
       ..setFloatUniforms(initialIndex: 2, (value) {
         value
@@ -1178,10 +1220,7 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
   // unrelated foreground. Geometry refresh may replace this before submission
   // without asking any child render object to paint outside the paint phase.
   void _recordOriginalShadows(Offset offset) {
-    final hasShadows = shapesWithGeometry.any(
-      (entry) => entry.$2.shapes.any((shape) => shape.shadows.isNotEmpty),
-    );
-    if (!hasShadows) {
+    if (!hasLayerShadows) {
       _originalShadows.layer = null;
       return;
     }
@@ -1738,16 +1777,20 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
             ..add(center.dy - halfExtents.height)
             ..add(center.dx + halfExtents.width)
             ..add(center.dy + halfExtents.height);
-          shapeBoxes.addAll([
-            center.dx,
-            center.dy,
-            size.width * devicePixelRatio / 2,
-            size.height * devicePixelRatio / 2,
-            inverse00,
-            inverse01,
-            inverse10,
-            inverse11,
-          ]);
+          // Hidden glass draws nothing, so it must not own the sea glass
+          // frost and shading of glass drawn over its box.
+          if (shape.appearance.visibility > 0) {
+            shapeBoxes.addAll([
+              center.dx,
+              center.dy,
+              size.width * devicePixelRatio / 2,
+              size.height * devicePixelRatio / 2,
+              inverse00,
+              inverse01,
+              inverse10,
+              inverse11,
+            ]);
+          }
           final blendMarker = firstInGroup
               ? -(geometry.blend * devicePixelRatio + 1)
               : geometry.blend * devicePixelRatio;
@@ -1810,6 +1853,7 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
             : const <double>[],
         offsetX: boundsInMatteSpace.left * devicePixelRatio,
         offsetY: boundsInMatteSpace.top * devicePixelRatio,
+        wobble: settings.seaGlassFinish.effectiveWobble * devicePixelRatio,
       );
       return (
         image: result.image,

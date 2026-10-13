@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter/painting.dart';
+import 'package:liquid_glass_renderer/src/glass_light.dart';
+import 'package:liquid_glass_renderer/src/google_sea_glass.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_appearance.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_settings.dart';
 import 'package:meta/meta.dart';
@@ -41,6 +43,12 @@ class SeaGlassFinish with Equatable {
     this.pitting = 0.6,
     this.stochasticFrost = true,
     this.gloss = 0.6,
+    this.shading = 0,
+    this.glow = 0,
+    this.flecks = 0,
+    this.shadow = 0,
+    this.elevation = 12,
+    this.wobble = 0,
   });
 
   /// No sea glass: the regular liquid-glass face.
@@ -54,7 +62,13 @@ class SeaGlassFinish with Equatable {
       sparkle = 0.35,
       pitting = 0.6,
       stochasticFrost = true,
-      gloss = 0.6;
+      gloss = 0.6,
+      shading = 0,
+      glow = 0,
+      flecks = 0,
+      shadow = 0,
+      elevation = 12,
+      wobble = 0;
 
   /// A heavily tumbled, milkier pebble: more scatter, coarser grain and a
   /// brighter rim. Pair it with a larger [LiquidGlassSettings.frost].
@@ -68,7 +82,13 @@ class SeaGlassFinish with Equatable {
       sparkle = 0.45,
       pitting = 1.6,
       stochasticFrost = true,
-      gloss = 0.35;
+      gloss = 0.35,
+      shading = 0,
+      glow = 0,
+      flecks = 0,
+      shadow = 0,
+      elevation = 12,
+      wobble = 0;
 
   /// A barely tumbled shard that is still mostly clear.
   const SeaGlassFinish.clear()
@@ -81,7 +101,39 @@ class SeaGlassFinish with Equatable {
       sparkle = 0.2,
       pitting = 0.4,
       stochasticFrost = true,
-      gloss = 0.85;
+      gloss = 0.85,
+      shading = 0,
+      glow = 0,
+      flecks = 0,
+      shadow = 0,
+      elevation = 12,
+      wobble = 0;
+
+  /// The milky, candy-like sea glass of Google's Sea Glass concept: thick
+  /// slabs of nearly opaque pastel glass flecked like terrazzo, brightest
+  /// where they are thin and where the light that went through them
+  /// gathers, casting soft shadows with a band of colored light, and with
+  /// slightly hand-made outlines.
+  ///
+  /// Use it through [LiquidGlassSettings.googleSeaGlass], which also turns
+  /// off the iOS glint and border, and color shapes from [GoogleSeaGlass].
+  const SeaGlassFinish.google()
+    : strength = 1,
+      depth = 14,
+      scatter = 0.85,
+      rimGlow = 0,
+      grain = 0.15,
+      grainSize = 1.1,
+      sparkle = 0,
+      pitting = 0.3,
+      stochasticFrost = true,
+      gloss = 0,
+      shading = 1,
+      glow = 1,
+      flecks = 1,
+      shadow = 1,
+      elevation = 18,
+      wobble = 1.5;
 
   /// Restores a finish produced by [toJson].
   factory SeaGlassFinish.fromJson(Object? json) {
@@ -101,6 +153,12 @@ class SeaGlassFinish with Equatable {
       stochasticFrost:
           json['stochasticFrost'] as bool? ?? defaults.stochasticFrost,
       gloss: number('gloss', defaults.gloss),
+      shading: number('shading', defaults.shading),
+      glow: number('glow', defaults.glow),
+      flecks: number('flecks', defaults.flecks),
+      shadow: number('shadow', defaults.shadow),
+      elevation: number('elevation', defaults.elevation),
+      wobble: number('wobble', defaults.wobble),
     );
   }
 
@@ -168,6 +226,52 @@ class SeaGlassFinish with Equatable {
   /// tumbled, frostier glass glints less.
   final double gloss;
 
+  /// How strongly the light shades the glass as a thick, milky slab.
+  ///
+  /// The body color shows where the slab is thickest, just inside its
+  /// center toward the light. The light brightens the thin glass along the
+  /// outline, except on the wall facing it, and a little of the half facing
+  /// it; brightening saturates a color's strongest channels first, so a
+  /// blue slab pales toward cyan. The thin rim is clear glass that scatters
+  /// little, so content behind shows through it, bent by the lens. Pair it
+  /// with a high [scatter], which makes the rest of the glass milky enough
+  /// to show its own color over any backdrop. The
+  /// light is [LiquidGlassSettings.light]; without a position it shines
+  /// along [LiquidGlassSettings.lightAngle]. `0`, the default, keeps the
+  /// tumbled pebble face.
+  final double shading;
+
+  /// How brightly the light that went through the slab glows where it
+  /// gathers, on the side away from the light. Only with [shading].
+  final double glow;
+
+  /// How densely the glass is flecked like terrazzo: angular chips, dark
+  /// ones of a deeper tone of the body and light, whitish crumbs, about a
+  /// [grainSize] or two long. They are anchored to each shape, so they move,
+  /// turn and scale with it. `0`, the default, has none.
+  final double flecks;
+
+  /// Strength of the shadow each shape casts away from the light.
+  ///
+  /// The shadow is soft and tinted by the glass, and light that passes
+  /// through the body pools inside it as a glow of the body's color. It
+  /// lengthens as the light moves aside or comes down
+  /// ([GlassLight.height]); [elevation] is how high the glass stands above
+  /// the surface. `0`, the default, casts none; shadows given to
+  /// `LiquidGlass.shadows` are drawn either way.
+  final double shadow;
+
+  /// How high, in logical pixels, the glass stands above the surface it
+  /// casts its [shadow] on.
+  final double elevation;
+
+  /// How far, in logical pixels, the outline strays from the exact shape,
+  /// in gentle undulations different for every shape, as hand-cut glass
+  /// does. The outline only sinks inward, so a shape never grows past its
+  /// box. `0`, the default, keeps the exact shape. Only full glass draws
+  /// it; FakeGlass keeps the exact shape.
+  final double wobble;
+
   /// [strength] clamped to `0` to `1`.
   double get effectiveStrength => strength.clamp(0.0, 1.0);
 
@@ -198,6 +302,25 @@ class SeaGlassFinish with Equatable {
   /// [pitting]; never negative.
   double get effectivePitting => math.max(0, pitting);
 
+  /// [shading] clamped to `0` to `1`.
+  double get effectiveShading => shading.clamp(0.0, 1.0);
+
+  /// [glow] clamped to `0` to `1`.
+  double get effectiveGlow => glow.clamp(0.0, 1.0);
+
+  /// [flecks] clamped to `0` to `1`; `0` when the finish is disabled.
+  double get effectiveFlecks => isEnabled ? flecks.clamp(0.0, 1.0) : 0;
+
+  /// [shadow] clamped to `0` to `1`; `0` when the finish is disabled.
+  double get effectiveShadow => isEnabled ? shadow.clamp(0.0, 1.0) : 0;
+
+  /// [elevation]; never negative.
+  double get effectiveElevation => math.max(0, elevation);
+
+  /// [wobble] clamped to `0` to `4` logical pixels; `0` when the finish is
+  /// disabled.
+  double get effectiveWobble => isEnabled ? wobble.clamp(0.0, 4.0) : 0;
+
   /// Backdrop reach of the pitting, in logical pixels, that the layer must
   /// add to its capture; `0` when the finish is disabled.
   double get samplingReach => isEnabled ? effectivePitting : 0;
@@ -214,6 +337,12 @@ class SeaGlassFinish with Equatable {
     double? pitting,
     bool? stochasticFrost,
     double? gloss,
+    double? shading,
+    double? glow,
+    double? flecks,
+    double? shadow,
+    double? elevation,
+    double? wobble,
   }) => SeaGlassFinish(
     strength: strength ?? this.strength,
     depth: depth ?? this.depth,
@@ -225,6 +354,12 @@ class SeaGlassFinish with Equatable {
     pitting: pitting ?? this.pitting,
     stochasticFrost: stochasticFrost ?? this.stochasticFrost,
     gloss: gloss ?? this.gloss,
+    shading: shading ?? this.shading,
+    glow: glow ?? this.glow,
+    flecks: flecks ?? this.flecks,
+    shadow: shadow ?? this.shadow,
+    elevation: elevation ?? this.elevation,
+    wobble: wobble ?? this.wobble,
   );
 
   /// A soft shadow tinted by the glass, as colored glass casts on a light
@@ -270,6 +405,12 @@ class SeaGlassFinish with Equatable {
     'pitting': pitting,
     'stochasticFrost': stochasticFrost,
     'gloss': gloss,
+    'shading': shading,
+    'glow': glow,
+    'flecks': flecks,
+    'shadow': shadow,
+    'elevation': elevation,
+    'wobble': wobble,
   };
 
   @override
@@ -284,6 +425,12 @@ class SeaGlassFinish with Equatable {
     pitting,
     stochasticFrost,
     gloss,
+    shading,
+    glow,
+    flecks,
+    shadow,
+    elevation,
+    wobble,
   ];
 }
 

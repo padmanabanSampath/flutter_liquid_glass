@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 
 export 'src/fake_glass.dart' show FakeGlass;
 export 'src/glass_glow.dart' show GlassGlow, GlassGlowLayer;
+export 'src/glass_light.dart' show GlassLight;
+export 'src/google_sea_glass.dart' show GoogleSeaGlass;
 export 'src/internal/glass_drag_builder.dart' show GestureMode;
 export 'src/liquid_glass.dart' show LiquidGlass;
 export 'src/liquid_glass_appearance.dart' show LiquidGlassAppearance;

@@ -47,14 +47,53 @@ enum GlassFrameState {
   active,
 }
 
+/// The shadows a layer draws for [shape], in the shape's own frame: the
+/// shadow [settings]' light casts, when the layer draws it for this shape,
+/// then the shape's own. [shapeToLayer] maps the shape into the layer and
+/// [layerToGlobal] the layer onto the screen, where the light hangs.
+@internal
+List<BoxShadow> layerShapeShadows(
+  ShapeGeometry shape,
+  Matrix4 shapeToLayer,
+  LiquidGlassSettings settings,
+  Matrix4? layerToGlobal,
+) {
+  if (layerToGlobal == null ||
+      settings.seaGlassFinish.effectiveShadow <= 0 ||
+      !shape.renderObject.layerCastsShadow ||
+      !shape.renderObject.hasSize) {
+    return shape.shadows;
+  }
+  final toGlobal = layerToGlobal.multiplied(shapeToLayer);
+  final size = shape.renderObject.size;
+  final center = MatrixUtils.transformPoint(
+    toGlobal,
+    size.center(Offset.zero),
+  );
+  return [
+    ...localizeShadowOffsets(
+      seaGlassCastShadows(
+        settings,
+        shape.appearance.tint,
+        center,
+        size,
+      ),
+      toGlobal,
+    ),
+    ...shape.shadows,
+  ];
+}
+
 /// Grows [bounds] to include the exterior shadows of [shapes], whose
-/// coordinates map into the layer through their transforms.
+/// coordinates map into the layer through their transforms, and the
+/// shadows the light casts when [layerToGlobal] places the layer on screen.
 @internal
 Rect expandForGlassShadows(
   Rect bounds,
   Iterable<(List<ShapeGeometry>, Matrix4)> shapes,
-  LiquidGlassSettings settings,
-) {
+  LiquidGlassSettings settings, [
+  Matrix4? layerToGlobal,
+]) {
   var result = bounds;
   for (final (geometryShapes, geometryToLayer) in shapes) {
     for (final shape in geometryShapes) {
@@ -63,7 +102,12 @@ Rect expandForGlassShadows(
       final shapeToLayer = shape.shapeToGeometry == null
           ? geometryToLayer
           : geometryToLayer.multiplied(shape.shapeToGeometry!);
-      for (final shadow in shape.shadows) {
+      for (final shadow in layerShapeShadows(
+        shape,
+        shapeToLayer,
+        settings,
+        layerToGlobal,
+      )) {
         final extent = max(
           shadow.spreadRadius +
               glassShadowBlurSupport(
@@ -765,6 +809,7 @@ abstract class LiquidGlassRenderObject extends RenderProxyBox
     bounds.inflate(materialOutset),
     _shadowSources(),
     settings,
+    _layerToGlobal,
   );
 
   /// Grows [bounds] by the committed shapes' exterior shadows only.
@@ -773,6 +818,25 @@ abstract class LiquidGlassRenderObject extends RenderProxyBox
     bounds,
     _shadowSources(),
     settings,
+    _layerToGlobal,
+  );
+
+  /// This layer's transform to the screen, where a light hangs; `null` when
+  /// no shape casts a shadow from the light.
+  Matrix4? get _layerToGlobal =>
+      settings.seaGlassFinish.effectiveShadow > 0 && attached
+      ? getTransformTo(null)
+      : null;
+
+  /// Whether this layer draws any shadow for its committed shapes.
+  @protected
+  bool get hasLayerShadows => shapesWithGeometry.any(
+    (entry) => entry.$2.shapes.any(
+      (shape) =>
+          shape.shadows.isNotEmpty ||
+          (settings.seaGlassFinish.effectiveShadow > 0 &&
+              shape.renderObject.layerCastsShadow),
+    ),
   );
 
   Iterable<(List<ShapeGeometry>, Matrix4)> _shadowSources() =>
@@ -788,6 +852,7 @@ abstract class LiquidGlassRenderObject extends RenderProxyBox
       material.inflate(effectSamplingReach(material)),
       shapes,
       settings,
+      _layerToGlobal,
     );
   }
 
@@ -798,10 +863,8 @@ abstract class LiquidGlassRenderObject extends RenderProxyBox
   void drawGlassShadows(Canvas canvas, Offset offset) {
     // The silhouette cutout needs a saveLayer, so skip the pass entirely
     // when no committed shape casts a shadow.
-    final hasShadows = shapesWithGeometry.any(
-      (entry) => entry.$2.shapes.any((shape) => shape.shadows.isNotEmpty),
-    );
-    if (!hasShadows) return;
+    if (!hasLayerShadows) return;
+    final layerToGlobal = _layerToGlobal;
     canvas.save();
     canvas.translate(offset.dx, offset.dy);
     canvas.saveLayer(effectPaintBounds, Paint());
@@ -809,14 +872,23 @@ abstract class LiquidGlassRenderObject extends RenderProxyBox
     for (final (_, geometry, geometryToLayer) in shapesWithGeometry) {
       for (final shape in geometry.shapes) {
         final shapeVisibility = shape.appearance.visibility.clamp(0.0, 1.0);
-        if (shape.shadows.isEmpty || shapeVisibility <= 0) continue;
+        if (shapeVisibility <= 0) continue;
+        final shadows = layerShapeShadows(
+          shape,
+          shape.shapeToGeometry == null
+              ? geometryToLayer
+              : geometryToLayer.multiplied(shape.shapeToGeometry!),
+          settings,
+          layerToGlobal,
+        );
+        if (shadows.isEmpty) continue;
         canvas.save();
         canvas.transform(geometryToLayer.storage);
         if (shape.shapeToGeometry case final transform?) {
           canvas.transform(transform.storage);
         }
         final rect = Offset.zero & shape.renderObject.size;
-        for (final shadow in shape.shadows) {
+        for (final shadow in shadows) {
           final paint = shadow
               .copyWith(
                 color: shadow.color.withValues(
@@ -849,7 +921,10 @@ abstract class LiquidGlassRenderObject extends RenderProxyBox
         _drawGlassShape(
           canvas,
           shape.shape,
-          (Offset.zero & shape.renderObject.size).deflate(.5),
+          // A wobbling outline sinks inward; the shadow reaches under it.
+          (Offset.zero & shape.renderObject.size).deflate(
+            .5 + settings.seaGlassFinish.effectiveWobble,
+          ),
           Paint()
             ..color = Color.fromRGBO(0, 0, 0, shapeVisibility)
             ..blendMode = BlendMode.dstOut,

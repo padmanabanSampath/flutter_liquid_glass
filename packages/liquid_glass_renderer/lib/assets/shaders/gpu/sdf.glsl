@@ -350,6 +350,45 @@ float getShapeCurvatureFactor(
     return smoothstep(-1.0, 1.0, min(cornerPosition.x, cornerPosition.y));
 }
 
+// Hand-made outlines (SeaGlassFinish.wobble): the outline sinks inward by up
+// to amount, in gentle undulations along each side, different for every
+// shape size. It only ever moves inward, so a shape stays within its box
+// and every bound on its distance holds. The point is moved outward along
+// the outline's normal instead of the distance being raised: the rounded
+// superellipse's distance is exact only near its outline.
+float wobbleHash(float n) {
+    n = fract(n * 0.1031);
+    n *= n + 33.33;
+    n *= n + n;
+    return fract(n);
+}
+
+float wobbleNoise(float t) {
+    float cell = floor(t);
+    float f = t - cell;
+    return mix(
+        wobbleHash(cell),
+        wobbleHash(cell + 1.0),
+        f * f * (3.0 - 2.0 * f)
+    );
+}
+
+vec2 outlineWobble(vec2 local, vec2 halfSize, float amount) {
+    // The outward normal of the implicit ellipse through the point: the top
+    // and bottom undulate along x, the ends along y.
+    vec2 n = local / max(halfSize * halfSize, vec2(1e-4));
+    n /= max(length(n), 1e-6);
+    float wavelength = max(0.6 * max(halfSize.x, halfSize.y), 1.0);
+    float seed = 97.0 * wobbleHash(halfSize.x * 0.37 + halfSize.y * 1.73);
+    float horizontal = wobbleNoise(
+        local.x / wavelength + seed + (n.y > 0.0 ? 17.0 : 0.0)
+    );
+    float vertical = wobbleNoise(
+        local.y / wavelength + seed + (n.x > 0.0 ? 53.0 : 31.0)
+    );
+    return n * (amount * (n.y * n.y * horizontal + n.x * n.x * vertical));
+}
+
 float getShapeDistance(
     int index,
     vec2 p,
@@ -365,6 +404,15 @@ float getShapeDistance(
         inverseBasis.x * delta.x + inverseBasis.y * delta.y,
         inverseBasis.z * delta.x + inverseBasis.w * delta.y
     );
+    #ifdef SDF_WOBBLE
+    if (SDF_WOBBLE > 0.0) {
+        localPoint += outlineWobble(
+            localPoint,
+            primitive.yz * 0.5,
+            SDF_WOBBLE / max(placement.z, 1e-4)
+        );
+    }
+    #endif
     float localDistance = getShapeSDF(
         primitive.x,
         localPoint,

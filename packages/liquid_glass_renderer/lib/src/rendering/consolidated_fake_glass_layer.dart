@@ -381,6 +381,7 @@ class RenderConsolidatedFakeGlassLayer extends LiquidGlassRenderObject
           appearance: shape.appearance,
           devicePixelRatio: devicePixelRatio,
           group: _groupSurfaces[shape.renderObject],
+          lightPosition: fakeGlassLightPosition(settings, shape.renderObject),
         );
         canvas.restore();
       }

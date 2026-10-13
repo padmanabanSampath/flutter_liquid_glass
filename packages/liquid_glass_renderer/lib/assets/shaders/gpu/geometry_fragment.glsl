@@ -22,6 +22,9 @@ layout(std140) uniform GeometryUniforms {
     vec4 uShapeTints[MAX_SHAPES];
     vec4 uShapeResponses[MAX_SHAPES];
     vec4 uShapeBounds[MAX_SHAPES];
+    // x: how far, in matte pixels, outlines sink inward in undulations
+    // (SeaGlassFinish.wobble); yzw unused.
+    vec4 uWobble;
 } geometryUniforms;
 
 #define uOffset geometryUniforms.uOffset
@@ -34,6 +37,8 @@ layout(std140) uniform GeometryUniforms {
 #define uShapeBounds geometryUniforms.uShapeBounds
 
 #include "displacement_encoding.glsl"
+
+#define SDF_WOBBLE (geometryUniforms.uWobble.x)
 
 // Included after uShapeData so the SDF helpers can read the uniform directly.
 #include "sdf.glsl"

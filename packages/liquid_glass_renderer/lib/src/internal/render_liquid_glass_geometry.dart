@@ -77,6 +77,11 @@ mixin LiquidGlassShapeRenderObject on RenderBox {
   /// Shadows painted by the parent layer before grouped glass shading.
   List<BoxShadow> get layerShadows;
 
+  /// Whether the parent layer also paints the shadow the light casts (see
+  /// [SeaGlassFinish.shadow]); shapes that paint their own shadows do not
+  /// need it to.
+  bool get layerCastsShadow => false;
+
   /// Resolved color and materialization controls for this shape.
   LiquidGlassAppearance get appearance;
 }
@@ -367,7 +372,8 @@ extension on LiquidGlassSettings {
     return effectiveRefractionHeight != other.effectiveRefractionHeight ||
         effectiveRefractionAmount != other.effectiveRefractionAmount ||
         refractionFitsShape != other.refractionFitsShape ||
-        contourWidth != other.contourWidth;
+        contourWidth != other.contourWidth ||
+        seaGlassFinish.effectiveWobble != other.seaGlassFinish.effectiveWobble;
   }
 }
 

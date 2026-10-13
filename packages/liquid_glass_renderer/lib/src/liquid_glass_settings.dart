@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter/widgets.dart';
+import 'package:liquid_glass_renderer/src/glass_light.dart';
+import 'package:liquid_glass_renderer/src/google_sea_glass.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_appearance.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_render_scope.dart';
 import 'package:liquid_glass_renderer/src/sea_glass.dart';
@@ -34,6 +36,7 @@ class LiquidGlassSettings with Equatable {
     this.tintAmount = 0.0,
     this.lightAngle = 0.0,
     this.seaGlassFinish = const SeaGlassFinish.none(),
+    this.light = const GlassLight(),
   });
 
   /// Restores a material vector produced by [toJson].
@@ -62,6 +65,7 @@ class LiquidGlassSettings with Equatable {
       tintAmount: number('tintAmount', defaults.tintAmount),
       lightAngle: number('lightAngle', defaults.lightAngle),
       seaGlassFinish: SeaGlassFinish.fromJson(json['seaGlassFinish']),
+      light: GlassLight.fromJson(json['light']),
     );
   }
 
@@ -100,6 +104,44 @@ class LiquidGlassSettings with Equatable {
     contourDirectionality: 1,
     bevelShadowStrength: 0,
     seaGlassFinish: finish,
+  );
+
+  /// Google's Sea Glass concept: thick, milky slabs of pastel glass flecked
+  /// like terrazzo, lit by a light that moves and casting soft shadows with
+  /// a band of colored light.
+  ///
+  /// Each shape shows its body color where it is thickest; the light
+  /// brightens its thin outline and, most, the side away from the [light],
+  /// where the light that went through it gathers (see
+  /// [SeaGlassFinish.google]). The glass is milky, so it shows its own color
+  /// over any backdrop, but its thin rim is clear: content scrolling behind
+  /// shows through it, bent by the lens. There is no iOS glint and no dark
+  /// border, and the outlines are slightly hand-made.
+  ///
+  /// Without a [GlassLight.position] the light comes from [lightAngle],
+  /// straight above by default, as on the concept's phone screens: shapes
+  /// glow along their lower edge and cast their shadows straight down. Turn
+  /// it, or move it with the pointer, for the concept's "move your pointer
+  /// to shift the light", or give it a position and [GlassLight.reach] for a
+  /// flashlight. Color shapes with [LiquidGlassAppearance.seaGlass] and the
+  /// colors of a [GoogleSeaGlass] set.
+  factory LiquidGlassSettings.googleSeaGlass({
+    SeaGlassFinish finish = const SeaGlassFinish.google(),
+    GlassLight light = const GlassLight(),
+    double lightAngle = 0,
+    double frost = 1,
+  }) => LiquidGlassSettings(
+    refractionHeight: 12,
+    refractionAmount: 12,
+    refractionFitsShape: false,
+    frost: frost,
+    highlight: 0,
+    contourStrength: 0,
+    contourDirectionality: 1,
+    bevelShadowStrength: 0,
+    lightAngle: lightAngle,
+    seaGlassFinish: finish,
+    light: light,
   );
 
   /// Light-mode settings fitted to an iOS 27 toolbar capsule.
@@ -345,6 +387,12 @@ class LiquidGlassSettings with Equatable {
   /// a disabled finish adds no per-pixel work.
   final SeaGlassFinish seaGlassFinish;
 
+  /// The light that shades sea glass slabs and casts their shadows; see
+  /// [SeaGlassFinish.shading] and [SeaGlassFinish.shadow]. Without a
+  /// position it shines along [lightAngle]. Changing it only changes
+  /// uniforms.
+  final GlassLight light;
+
   /// Unit vector along which the light travels, in logical pixel space:
   /// straight down for the default [lightAngle].
   @internal
@@ -399,6 +447,7 @@ class LiquidGlassSettings with Equatable {
     double? tintAmount,
     double? lightAngle,
     SeaGlassFinish? seaGlassFinish,
+    GlassLight? light,
   }) => LiquidGlassSettings(
     refractionHeight: refractionHeight ?? this.refractionHeight,
     refractionAmount: refractionAmount ?? this.refractionAmount,
@@ -413,6 +462,7 @@ class LiquidGlassSettings with Equatable {
     tintAmount: tintAmount ?? this.tintAmount,
     lightAngle: lightAngle ?? this.lightAngle,
     seaGlassFinish: seaGlassFinish ?? this.seaGlassFinish,
+    light: light ?? this.light,
   );
 
   /// Serializes the public material vector for example presets and tooling.
@@ -431,6 +481,7 @@ class LiquidGlassSettings with Equatable {
     if (lightAngle != 0) 'lightAngle': lightAngle,
     if (seaGlassFinish != const SeaGlassFinish.none())
       'seaGlassFinish': seaGlassFinish.toJson(),
+    if (light != const GlassLight()) 'light': light.toJson(),
   };
 
   @override
@@ -448,6 +499,7 @@ class LiquidGlassSettings with Equatable {
     tintAmount,
     lightAngle,
     seaGlassFinish,
+    light,
   ];
 }
 
