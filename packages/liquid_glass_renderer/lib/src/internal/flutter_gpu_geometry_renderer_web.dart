@@ -88,6 +88,7 @@ class FlutterGpuGeometryRenderer {
     List<double> appearanceData = const <double>[],
     List<double> rseData = const <double>[],
     List<double> boundsData = const <double>[],
+    double wobble = 0,
   }) => throw UnsupportedError('Flutter GPU is not available on the web.');
 
   void releaseOutput() {}

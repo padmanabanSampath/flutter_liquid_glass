@@ -78,8 +78,19 @@ uniform vec4 uMemberShape[4];
 uniform vec4 uMemberRse[12];
 uniform vec4 uMemberTint[4];
 uniform vec4 uMemberBody[4];
-// Sea glass gloss (SeaGlassFinish.gloss) in x; yzw unused.
+// Sea glass gloss, slab shading and lip (SeaGlassFinish.gloss, shading,
+// lip) in xyz; w unused.
 uniform vec4 uSeaGlassGloss;
+// The light that shades sea glass slabs (GlassLight), in this surface's
+// centered frame and logical pixels:
+//   uSeaGlassLight:      position (xy) and height (z) of a positioned light,
+//                        and the reach of its falloff (w, 0 for none); a
+//                        zero height is a far light along uLightDirection
+//   uSeaGlassLightColor: the light's color times its intensity
+//   uSeaGlassAmbient:    the ambient light
+uniform vec4 uSeaGlassLight;
+uniform vec4 uSeaGlassLightColor;
+uniform vec4 uSeaGlassAmbient;
 
 // Tint and body color of this pixel: the surface's own, or blended toward
 // the next member's across a group's seam.
@@ -155,6 +166,52 @@ float seaGlassGloss(float inward, vec2 normal) {
   return glint + caustic + outline;
 }
 
+// The thick milky slab's own face, premultiplied, which covers the face the
+// backdrop filter produced as much as the glass scatters, as the final
+// render shader's slab shading does.
+vec4 seaGlassSlab(vec2 position, float inward, vec2 normal, float scatter) {
+  // From the surface's center, as the final render shader lights a shape.
+  vec2 toward = uSeaGlassLight.z > 0.0 ? uSeaGlassLight.xy : -uLightDirection;
+  float distance = max(length(toward), 1e-6);
+  toward /= distance;
+  // A positioned light right above the surface lights it evenly.
+  float tilt = uSeaGlassLight.z > 0.0
+      ? clamp(distance / (0.5 * uSeaGlassLight.z), 0.0, 1.0)
+      : 1.0;
+  vec2 shade = slabShadeDirection(toward, uSeaGlassLight.z > 0.0);
+  float depth = max(uSeaGlassBody.y, 0.001);
+  float edge = clamp(inward / depth, 0.0, 1.0);
+  float rim = dot(normal, shade);
+  float s = slabLighting(
+      position / max(uSize * 0.5, vec2(1.0)),
+      shade,
+      rim,
+      edge,
+      tilt,
+      min(uSize.x, uSize.y) / max(max(uSize.x, uSize.y), 1e-3)
+  );
+  float density = clamp(gSeaGlassColor.a, 0.0, 1.0);
+  vec3 body = mix(
+      vec3(1.0),
+      clamp(gSeaGlassColor.rgb, vec3(0.02), vec3(1.0)),
+      density
+  );
+  vec3 lit = mix(
+      slabColor(body, s),
+      slabLipColor(body),
+      clamp(uSeaGlassGloss.z, 0.0, 1.0) * slabLipBand(inward, depth, rim)
+  );
+  float falloff = 1.0;
+  if (uSeaGlassLight.z > 0.0 && uSeaGlassLight.w > 0.0) {
+    vec2 d = (position - uSeaGlassLight.xy) / uSeaGlassLight.w;
+    falloff = 1.0 / (1.0 + dot(d, d));
+  }
+  lit *= uSeaGlassAmbient.rgb + uSeaGlassLightColor.rgb * falloff;
+  float cover = scatter * clamp(uSeaGlassGloss.y, 0.0, 1.0);
+  // FakeGlass stays SDR.
+  return vec4(min(lit, vec3(1.0)) * cover, cover);
+}
+
 // The varying part of the sea glass face, premultiplied, to composite over
 // the face the backdrop filter and the thickness pass produced.
 vec4 seaGlassOverlay(vec2 position, float inward, float facing, vec2 normal) {
@@ -171,6 +228,15 @@ vec4 seaGlassOverlay(vec2 position, float inward, float facing, vec2 normal) {
   float rimGlow = clamp(uSeaGlassBody.w, 0.0, 1.0) * (1.0 - thickness) *
       rimLight * 0.6;
   vec4 overlay = vec4(pastel * rimGlow, rimGlow);
+  if (uSeaGlassGloss.y > 0.0) {
+    float scatter = clamp(
+        uSeaGlassBody.z * sizeResponse.y * mix(1.6, 1.0, thickness),
+        0.0,
+        1.0
+    );
+    overlay = overlay + seaGlassSlab(position, inward, normal, scatter) *
+        (1.0 - overlay.a);
+  }
 
   highp float grainSize = max(uSeaGlassSurface.y, 0.25);
   float grain = seaGlassPits(position, grainSize).z *

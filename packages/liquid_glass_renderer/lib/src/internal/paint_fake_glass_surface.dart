@@ -107,6 +107,51 @@ Color _surfaceTint(
   );
 }
 
+/// Where [settings]' light hangs in [renderObject]'s own logical
+/// coordinates, for [paintFakeGlassSurface]; `null` for a far light or when
+/// the slab shading is off.
+@internal
+Offset? fakeGlassLightPosition(
+  LiquidGlassSettings settings,
+  RenderBox renderObject,
+) {
+  final position = settings.light.position;
+  if (position == null ||
+      settings.seaGlassFinish.effectiveShading <= 0 ||
+      !renderObject.attached) {
+    return null;
+  }
+  return renderObject.globalToLocal(position);
+}
+
+/// The slab shading's light (see uSeaGlassLight in fake_glass_surface.frag):
+/// a positioned light relative to the surface's center.
+List<double> _lightUniforms(GlassLight light, Offset? position, Size size) {
+  final intensity = light.effectiveIntensity;
+  final center = size.center(Offset.zero);
+  return [
+    if (position != null) ...[
+      position.dx - center.dx,
+      position.dy - center.dy,
+      light.effectiveHeight,
+      light.reach ?? 0,
+    ] else ...[
+      0,
+      0,
+      0,
+      0,
+    ],
+    light.color.r * intensity,
+    light.color.g * intensity,
+    light.color.b * intensity,
+    0,
+    light.ambient.r,
+    light.ambient.g,
+    light.ambient.b,
+    0,
+  ];
+}
+
 /// The members of a blend group one FakeGlass surface draws the union of.
 @internal
 typedef FakeGlassSurfaceGroup = ({
@@ -127,6 +172,9 @@ typedef FakeGlassSurfaceGroup = ({
 /// With a [group], the surface draws the group's smooth union where its
 /// shape is the nearest member, so bridges to its neighbors appear and the
 /// merged glass is drawn once.
+///
+/// [lightPosition] is where a positioned [GlassLight] hangs, in the shape's
+/// own logical coordinates (see [fakeGlassLightPosition]).
 void paintFakeGlassSurface(
   Canvas canvas, {
   required ui.FragmentShader shader,
@@ -137,6 +185,7 @@ void paintFakeGlassSurface(
   required double devicePixelRatio,
   bool exteriorOnly = false,
   FakeGlassSurfaceGroup? group,
+  Offset? lightPosition,
 }) {
   final appearanceVisibility = appearance.visibility.clamp(0.0, 1.0);
   final seaGlass = settings.seaGlassFinish;
@@ -229,7 +278,13 @@ void paintFakeGlassSurface(
             appearance.tint.a,
           ])
           ..setFloats(_groupUniforms(group, settings))
-          ..setFloats([seaGlass.effectiveGloss, 0, 0, 0]);
+          ..setFloats([
+            seaGlass.effectiveGloss,
+            seaGlass.effectiveShading,
+            seaGlass.effectiveLip,
+            0,
+          ])
+          ..setFloats(_lightUniforms(settings.light, lightPosition, size));
       });
   final contourOutset = fakeGlassSurfaceOutset(settings);
   // A member also draws its half of the bridges, which reach up to half the

@@ -105,3 +105,61 @@ float seaGlassThickness(float inwardDistance, float depth) {
     float x = clamp(inwardDistance / max(depth, 0.001), 0.0, 1.0);
     return x * (2.0 - x);
 }
+
+// MARK: Slab shading (SeaGlassFinish.shading)
+
+// The light across a thick slab of milky glass, from -1 on its far side
+// (deepest) to 1 on the side facing the light (palest): the position across
+// the shape along the light, steepened on the rounded rim where the surface
+// turns toward or away from it.
+//   q:      position over the half size, -1..1 across the shape
+//   toward: unit direction toward the light, in the frame of q
+//   rim:    the outward normal's alignment with toward, -1..1
+//   edge:   0 at the outline, 1 from the slab's depth inward
+//   tilt:   how much the light's direction shades the slab, 0..1; a light
+//           right above it lights it evenly
+//   aspect: the shape's short side over its long side; round pebbles are
+//           domes, shaded more steeply than flat slabs
+float slabLighting(
+    vec2 q,
+    vec2 toward,
+    float rim,
+    float edge,
+    float tilt,
+    float aspect
+) {
+    float across = clamp(dot(q, toward), -1.0, 1.0);
+    float shoulder = rim * (1.0 - edge) * (1.0 - edge);
+    float dome = 1.0 + 0.7 * smoothstep(0.6, 0.9, aspect);
+    return clamp((0.85 * across + 0.6 * shoulder) * tilt * dome, -1.0, 1.0);
+}
+
+// The slab's color at lighting s: mixed toward white on the lit side, the
+// body in between, a deeper and more saturated tone on the far side.
+vec3 slabColor(vec3 body, float s) {
+    vec3 pale = mix(body, vec3(1.0), 0.6);
+    vec3 deep = pow(max(body, vec3(0.0)), vec3(1.5));
+    return s >= 0.0 ? mix(body, pale, s) : mix(body, deep, -s);
+}
+
+// Light that went through the slab gathers along its far edge in a rich,
+// saturated tone of the body. Returns the lip's weight at inward distance d
+// from the outline for a slab of the given depth, whose outline there faces
+// the light by rim.
+float slabLipBand(float d, float depth, float rim) {
+    return smoothstep(0.0, 0.08 * depth, d) *
+        (1.0 - smoothstep(0.4 * depth, 1.2 * depth, d)) *
+        smoothstep(0.1, 0.8, -rim);
+}
+
+// The direction a slab's shading comes from, given the unit direction
+// toward the light: the top face also reflects the sky above the screen, so
+// it is shaded from higher up than the light alone, most under daylight.
+vec2 slabShadeDirection(vec2 towardLight, bool positioned) {
+    vec2 shade = towardLight + vec2(0.0, positioned ? -0.4 : -1.1);
+    return shade / max(length(shade), 1e-6);
+}
+
+vec3 slabLipColor(vec3 body) {
+    return min(pow(max(body, vec3(0.0)), vec3(1.8)) * 1.12, vec3(1.0));
+}

@@ -57,6 +57,22 @@
   shoulder facing the light, a softer one on the far wall and a thin bright
   line along the outline, following `lightAngle`. Real glass and FakeGlass.
 - **More colors.** `SeaGlassColors.ruby`, `clear` and `mist`.
+- **Google Sea Glass.** A separate preset after Google's Sea Glass concept:
+  `LiquidGlassSettings.googleSeaGlass()` with `SeaGlassFinish.google()`
+  renders lit slabs instead of domes. New finish controls, all `0` in the
+  other finishes: `shading` pales the side facing the light and deepens the
+  far side, `lip` adds a deeper band along the far edge, `shadow` casts a
+  crisp shadow tinted by the glass from `elevation` points up (small round
+  pieces also focus a glow of their color into it), and `wobble` sinks the
+  outline in hand-made undulations (full glass only). `GoogleSeaGlass` holds
+  the concept's four glass sets by role.
+- **Scene light.** `LiquidGlassSettings.light` (`GlassLight`) is daylight
+  along `lightAngle`, or, given a `position`, a lamp that lights each shape
+  from its own side and fans shadows out away from itself; with `color`,
+  `intensity`, `ambient` and a flashlight `reach`. It is uniforms only.
+- **Google Sea Glass example.** `example/lib/google_sea_glass_main.dart`
+  recreates the concept's component sheet, with daylight, dusk, a flashlight
+  that follows the pointer and the four glass sets.
 
 ### Performance
 
@@ -74,6 +90,13 @@
 
 - A layer that has to drop shapes past its 16-shape limit now warns once in
   debug builds instead of dropping them silently.
+- Geometry passes no longer read uniforms of a later frame. The shared
+  uniform buffer rewinds into a slot only once the GPU has run every pass
+  that read it; before, a GPU more than four frames behind could draw a
+  later frame's shapes, and an incremental update then kept the stale
+  stripes.
+- Hidden glass (`visibility: 0`) no longer owns the sea glass frost and
+  shading of glass drawn over its box, and casts no shadow layer.
 
 ## 1.0.0-dev.1
 

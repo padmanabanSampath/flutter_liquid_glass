@@ -428,6 +428,76 @@ highlights with the device; feed the device's tilt (for example from a
 gyroscope) or a gesture into `lightAngle` to do the same. It is one uniform,
 so changing it never re-renders the geometry.
 
+### Google Sea Glass
+
+| Daylight | Flashlight |
+| --- | --- |
+| ![Pastel sea glass components lit from the upper left](doc/readme/google-sea-glass.jpg) | ![The same components lit by a flashlight in a dim room](doc/readme/google-sea-glass-flashlight.jpg) |
+
+A separate preset recreates the pastel glass of Google's Sea Glass concept
+(the community Figma file). It is an unofficial recreation, not a Google
+API. Where the pebbles above are domes that bow the backdrop, this glass is
+a lit slab: the side facing the light pales, the far side deepens into a
+darker lip, and every shape casts a shadow in its own color.
+
+```dart
+LiquidGlassLayer(
+  settings: LiquidGlassSettings.googleSeaGlass(),
+  child: LiquidGlass(
+    shape: const LiquidRoundedSuperellipse(borderRadius: 40),
+    appearance: GoogleSeaGlass.appearance(GoogleSeaGlass.original.primary),
+    child: const SizedBox(width: 320, height: 96),
+  ),
+)
+```
+
+`SeaGlassFinish.google()` turns on four controls the other finishes leave
+at `0`, so they render as before:
+
+| Control | Effect |
+| --- | --- |
+| `shading` | Pales the side facing the light and deepens the far side. |
+| `lip` | A deeper band along the far edge, as on a thick slab. |
+| `shadow` | Each shape casts a crisp shadow tinted by its glass, `elevation` points above the surface. Small round pieces also focus a glow of their color into it. |
+| `wobble` | Sinks the outline inward in gentle undulations, up to 4 points, so shapes look hand made. It never grows a shape past its box. |
+
+`LiquidGlassSettings.light` is the light those use (`GlassLight`). Without a
+`position` it is daylight along `lightAngle`. With one, in global logical
+pixels, it hangs `height` above the glass like a lamp: each shape is lit from
+its own side and shadows fan out away from it. `color` and `intensity` set
+the light; `ambient` lifts every shape, as a room's light does; `reach` makes
+it fall off like a flashlight's beam. Moving the light only changes
+uniforms, never the geometry.
+
+```dart
+LiquidGlassSettings.googleSeaGlass(
+  light: GlassLight(
+    position: pointerPosition,
+    height: 360,
+    reach: 560,
+    color: const Color(0xFFFFF0DC),
+    ambient: const Color(0xFF6F5F4D),
+  ),
+)
+```
+
+`GoogleSeaGlass` holds the concept's four glass sets (`original`, `beach`,
+`jewel` and `frost`), each a color per role: `primary` for search bars and
+tiles, `secondary` for media cards, `tertiary` for navigation bars,
+`positive` for selections, `error` for calls to action, `accent` for
+floating action buttons, and so on. FakeGlass follows the shading, lip,
+light and shadows; only full glass draws the wobble.
+
+The example recreates the concept's component sheet: a search bar that
+expands into an AI Mode answer, quick settings, a music card, segmented
+buttons, a floating action button menu, daylight, dusk and a flashlight that
+follows the pointer, and a tap on G cycles the glass sets:
+
+```sh
+cd packages/liquid_glass_renderer/example
+flutter run -t lib/google_sea_glass_main.dart --enable-impeller --enable-flutter-gpu
+```
+
 ### Cost
 
 The finish adds no textures. Its per-pixel work runs only while it is
@@ -671,6 +741,8 @@ merge, and one that is alive), every preset
 in light and dark, the Liquid Glass slider, sea glass finish controls, a light
 angle, full/fake switching and several backdrops. Settings you tune can be
 saved as custom presets.
+`lib/google_sea_glass_main.dart` runs the [Google Sea Glass](#google-sea-glass)
+component sheet.
 
 ## Limitations
 

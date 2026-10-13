@@ -96,6 +96,7 @@ The liquid glass effect works by capturing and distorting background pixels thro
 - **Shapes** (`lib/src/liquid_shape.dart`): Defines glass shape types (RoundedSuperellipse, Oval, RoundedRectangle, Blob). `LiquidBlob` (GPU type 4, FakeGlass type 3) packs its waves into the superellipse parameter slots; its radius is mirrored in Dart (`radiusAt`), `gpu/sdf.glsl` and `fake_glass_shape.glsl`, so change all three together
 - **Settings** (`lib/src/liquid_glass_settings.dart`): Configures glass appearance (refraction, frost, lighting)
 - **Sea glass** (`lib/src/sea_glass.dart`): `SeaGlassFinish` (tumbled, frosted surface on `LiquidGlassSettings.seaGlassFinish`) and the `SeaGlassColors` body palette; the tint becomes the glass body. `SeaGlassFinish.none()` (the default) must keep output byte-identical
+- **Google sea glass** (`lib/src/google_sea_glass.dart`, `lib/src/glass_light.dart`): `SeaGlassFinish.google()` and `LiquidGlassSettings.googleSeaGlass()` add slab shading (`shading`, `lip`; `slab*` in `sea_glass.glsl`), light-cast shadows (`seaGlassCastShadows` in `glass_shadow.dart`) and `wobble` (`outlineWobble` in `gpu/sdf.glsl`, uniform `uWobble`; full glass only, and it may only shrink outlines so box bounds and culling stay valid). `GlassLight` reaches the final pass as `uSeaGlassLight*` uniforms and FakeGlass's surface shader; all of these are `0` outside the Google finish, keeping other output unchanged
 - **FakeGlass** (`lib/src/fake_glass.dart`): Lightweight alternative using backdrop filters instead of shaders
 - **GlassGlow** (`lib/src/glass_glow.dart`): Touch-responsive glow effects
 - **LiquidStretch** (`lib/src/stretch.dart`): Squash and stretch animations
@@ -110,6 +111,7 @@ The package caches geometry in textures to minimize GPU work. `gpu.Texture` cann
 - Cache static geometry - re-rendering on every frame is expensive
 - Moving a shape redraws only the matte around it: the renderer copies the previous matte into the next ring texture and redraws the shape's reach (contour plus three blend radii; see `_planMatteUpdate` and `sceneSample` in `gpu/sdf.glsl`). Keep the group union local: a pixel may depend only on members within two blend radii of its nearest member, or incremental updates stop being exact (`test/src/incremental_matte_test.dart` compares them with full renders)
 - Flutter GPU bindings outlive a draw; call `clearBindings()` before binding a different pipeline in the same pass (the Vulkan backend crashes otherwise)
+- The shared `HostBuffer` rewinds into a frame slot only after the GPU has completed every command buffer that read it (`_submitOrDefer` tracks completions). Never `reset()` it on a timer or per frame alone: a lagging GPU then reads a later frame's uniforms, and incremental matte updates keep the stale result
 
 ## Code Generation
 
