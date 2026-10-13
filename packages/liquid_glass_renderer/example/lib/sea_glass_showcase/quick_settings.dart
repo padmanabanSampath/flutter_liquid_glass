@@ -6,6 +6,10 @@ import 'package:liquid_glass_renderer_example/sea_glass_showcase/showcase_option
 /// A quick settings panel in sea glass: frosted tiles that turn to colored
 /// glass when switched on, and a brightness slider in the body color.
 ///
+/// The tiles are drops of one blend group: their blend stays below the gap
+/// between them, so they keep apart at rest, but drag one toward a neighbor
+/// and it stretches, flows into it and pinches off when let go.
+///
 /// Its twelve shapes all live in the enclosing layer, so the panel samples
 /// the backdrop once however many tiles are on.
 class QuickSettingsPanel extends StatelessWidget {
@@ -29,6 +33,9 @@ class QuickSettingsPanel extends StatelessWidget {
 
   static const tileHeight = 64.0;
   static const gap = 12.0;
+
+  /// Blend radius of the tiles, just below their [gap].
+  static const tileBlend = 10.0;
 
   Widget _tile(
     IconData icon,
@@ -68,34 +75,46 @@ class QuickSettingsPanel extends StatelessWidget {
           onChanged: onBrightness,
         ),
         const SizedBox(height: gap * 2),
-        _row(
-          _tile(Icons.wifi_rounded, 'Wi-Fi', detail: 'Tide Pool 5G'),
-          _tile(Icons.swap_vert_rounded, 'Mobile data'),
-        ),
-        _row(
-          _tile(Icons.bluetooth_rounded, 'Bluetooth'),
-          _row(
-            _tile(Icons.flashlight_on_rounded, 'Torch', compact: true),
-            _tile(Icons.location_on_rounded, 'Location', compact: true),
-            bottom: 0,
+        LiquidGlassBlendGroup(
+          blend: tileBlend,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _row(
+                _tile(Icons.wifi_rounded, 'Wi-Fi', detail: 'Tide Pool 5G'),
+                _tile(Icons.swap_vert_rounded, 'Mobile data'),
+              ),
+              _row(
+                _tile(Icons.bluetooth_rounded, 'Bluetooth'),
+                _row(
+                  _tile(Icons.flashlight_on_rounded, 'Torch', compact: true),
+                  _tile(Icons.location_on_rounded, 'Location', compact: true),
+                  bottom: 0,
+                ),
+              ),
+              _row(
+                _tile(Icons.bedtime_rounded, 'Modes'),
+                _tile(
+                  Icons.radio_button_checked_rounded,
+                  'Screen record',
+                  detail: 'Start',
+                ),
+              ),
+              _row(
+                _row(
+                  _tile(Icons.flight_rounded, 'Airplane mode', compact: true),
+                  _tile(
+                    Icons.qr_code_scanner_rounded,
+                    'Scan QR code',
+                    compact: true,
+                  ),
+                  bottom: 0,
+                ),
+                _tile(Icons.sync_alt_rounded, 'Quick Share'),
+                bottom: 0,
+              ),
+            ],
           ),
-        ),
-        _row(
-          _tile(Icons.bedtime_rounded, 'Modes'),
-          _tile(
-            Icons.radio_button_checked_rounded,
-            'Screen record',
-            detail: 'Start',
-          ),
-        ),
-        _row(
-          _row(
-            _tile(Icons.flight_rounded, 'Airplane mode', compact: true),
-            _tile(Icons.qr_code_scanner_rounded, 'Scan QR code', compact: true),
-            bottom: 0,
-          ),
-          _tile(Icons.sync_alt_rounded, 'Quick Share'),
-          bottom: 0,
         ),
       ],
     );
@@ -137,7 +156,7 @@ class _Tile extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: LiquidStretch.seaGlass(
-          child: LiquidGlass(
+          child: LiquidGlass.grouped(
             shape: const LiquidRoundedSuperellipse(
               borderRadius: QuickSettingsPanel.tileHeight / 2,
             ),

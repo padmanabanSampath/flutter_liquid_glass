@@ -1,5 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:flutter/widgets.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+import 'package:liquid_glass_renderer_example/sea_glass_showcase/living_glass.dart';
 import 'package:liquid_glass_renderer_example/sea_glass_showcase/showcase_options.dart';
 import 'package:liquid_glass_renderer_example/sea_glass_showcase/showcase_style.dart';
 
@@ -21,6 +24,7 @@ class ShowcasePageFrame extends StatelessWidget {
     required this.subtitle,
     required this.children,
     this.maxWidth = 520,
+    this.ink,
     super.key,
   });
 
@@ -29,9 +33,12 @@ class ShowcasePageFrame extends StatelessWidget {
   final List<Widget> children;
   final double maxWidth;
 
+  /// Ink for the title; the showcase's by default.
+  final Color? ink;
+
   @override
   Widget build(BuildContext context) {
-    final ink = ShowcaseScope.of(context).ink;
+    final ink = this.ink ?? ShowcaseScope.of(context).ink;
     return SafeArea(
       bottom: false,
       child: SingleChildScrollView(
@@ -39,39 +46,46 @@ class ShowcasePageFrame extends StatelessWidget {
         child: Center(
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: maxWidth),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(right: controlsClearance - 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          color: ink,
-                          fontSize: 34,
-                          height: 1.1,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -.6,
+            // Text on the wallpaper keeps a halo, so it reads over photos;
+            // text on colored glass sets its own.
+            child: DefaultTextStyle.merge(
+              style: TextStyle(shadows: haloFor(ink)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      right: controlsClearance - 20,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            color: ink,
+                            fontSize: 34,
+                            height: 1.1,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -.6,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          color: ink.withValues(alpha: .7),
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            color: ink.withValues(alpha: .7),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 26),
-                ...children,
-              ],
+                  const SizedBox(height: 26),
+                  ...children,
+                ],
+              ),
             ),
           ),
         ),
@@ -80,18 +94,20 @@ class ShowcasePageFrame extends StatelessWidget {
   }
 }
 
-/// The glass layer of a page section, in the showcase's current finish.
+/// The glass layer of a page section, in the showcase's current finish or
+/// in [settings].
 class ShowcaseLayer extends StatelessWidget {
-  const ShowcaseLayer({required this.child, super.key});
+  const ShowcaseLayer({required this.child, this.settings, super.key});
 
   final Widget child;
 
-  static const _frost = LiquidGlassAppearance.seaGlass(color: frostedWhite);
+  /// Settings of this layer alone; the showcase's by default.
+  final LiquidGlassSettings? settings;
 
   @override
   Widget build(BuildContext context) => LiquidGlassLayer(
-    settings: ShowcaseScope.of(context).settings,
-    defaultAppearance: _frost,
+    settings: settings ?? ShowcaseScope.of(context).settings,
+    defaultAppearance: ShowcaseScope.of(context).frost,
     child: child,
   );
 }
@@ -145,7 +161,9 @@ class GlassCard extends StatelessWidget {
   }
 }
 
-/// A round sea glass button with an icon, frosted or of [body].
+/// A round sea glass button with an icon, frosted or of [body]. Its outline
+/// follows the showcase's shape: an oval, a tumbled pebble of its own or a
+/// living pebble.
 class GlassPebble extends StatelessWidget {
   const GlassPebble({
     required this.icon,
@@ -174,6 +192,7 @@ class GlassPebble extends StatelessWidget {
     final content = Center(
       child: Icon(icon, color: ink, size: iconSize ?? size * .42),
     );
+    final shape = pebbleOutline(context, style.shape, seedOf(label));
     final appearance = body == null
         ? null
         : LiquidGlassAppearance.seaGlass(color: body);
@@ -192,13 +211,13 @@ class GlassPebble extends StatelessWidget {
           child: LiquidStretch.seaGlass(
             child: grouped
                 ? LiquidGlass.grouped(
-                    shape: const LiquidOval(),
+                    shape: shape,
                     appearance: appearance,
                     shadows: shadows,
                     child: content,
                   )
                 : LiquidGlass(
-                    shape: const LiquidOval(),
+                    shape: shape,
                     appearance: appearance,
                     shadows: shadows,
                     child: content,
@@ -315,14 +334,17 @@ class GlassSlider extends StatelessWidget {
 
 /// A small uppercase heading above a section.
 class SectionHeader extends StatelessWidget {
-  const SectionHeader(this.text, {this.trailing, super.key});
+  const SectionHeader(this.text, {this.trailing, this.ink, super.key});
 
   final String text;
   final String? trailing;
 
+  /// Ink for the heading; the showcase's by default.
+  final Color? ink;
+
   @override
   Widget build(BuildContext context) {
-    final ink = ShowcaseScope.of(context).ink;
+    final ink = this.ink ?? ShowcaseScope.of(context).ink;
     final style = TextStyle(
       color: ink.withValues(alpha: .72),
       fontSize: 12,
@@ -371,6 +393,114 @@ class IconBubble extends StatelessWidget {
         color: color ?? Color(style.dark ? 0x24FFFFFF : 0x4DFFFFFF),
       ),
       child: Icon(icon, color: iconColor ?? style.ink, size: size * .5),
+    );
+  }
+}
+
+/// A labelled slider whose knob is a pebble of sea glass of [knob] on a
+/// painted track. Place it in a [LiquidGlassLayer]; the knob is one shape.
+class GlassValueSlider extends StatelessWidget {
+  const GlassValueSlider({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    required this.knob,
+    required this.ink,
+    super.key,
+  });
+
+  final String label;
+
+  /// From `0` to `1`.
+  final double value;
+  final ValueChanged<double> onChanged;
+  final Color knob;
+  final Color ink;
+
+  static const _knob = 30.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 104,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: ink,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final travel = math.max<double>(constraints.maxWidth - _knob, 1);
+              final x = travel * value.clamp(0.0, 1.0);
+              void update(Offset local) =>
+                  onChanged(((local.dx - _knob / 2) / travel).clamp(0.0, 1.0));
+              return Semantics(
+                slider: true,
+                label: label,
+                value: '${(value * 100).round()}%',
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onHorizontalDragDown: (details) =>
+                      update(details.localPosition),
+                  onHorizontalDragUpdate: (details) =>
+                      update(details.localPosition),
+                  child: SizedBox(
+                    height: 44,
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          left: _knob / 2,
+                          right: _knob / 2,
+                          top: 19,
+                          height: 6,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: ink.withValues(alpha: .14),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          left: _knob / 2,
+                          width: x,
+                          top: 19,
+                          height: 6,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: ink.withValues(alpha: .42),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          left: x,
+                          top: 7,
+                          width: _knob,
+                          height: _knob,
+                          child: LiquidGlass(
+                            shape: const LiquidOval(),
+                            appearance: LiquidGlassAppearance.seaGlass(
+                              color: knob,
+                            ),
+                            child: const SizedBox.expand(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

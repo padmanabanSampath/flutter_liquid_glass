@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+import 'package:liquid_glass_renderer_example/sea_glass_showcase/living_glass.dart';
+import 'package:liquid_glass_renderer_example/sea_glass_showcase/pages/common.dart';
 import 'package:liquid_glass_renderer_example/sea_glass_showcase/renderer_backend.dart';
 import 'package:liquid_glass_renderer_example/sea_glass_showcase/showcase_options.dart';
 import 'package:liquid_glass_renderer_example/sea_glass_showcase/wallpapers.dart';
@@ -12,19 +14,30 @@ import 'package:liquid_glass_renderer_example/sea_glass_showcase/wallpapers.dart
 ///
 /// The palette button bursts into every sea glass color: the pebbles start
 /// inside it and pull out of its glass, blending with it on the way, then
-/// settle on two arcs. The style button opens a tray with the wallpaper,
-/// the finish and the tone. All of it is one layer: at most fifteen shapes
-/// are on screen at once, below the sixteen a layer can render.
+/// settle on three arcs. The style button opens a tray with the wallpaper,
+/// the finish, the tone, the shape and the shine. All of it is one layer:
+/// one menu opens only once the other has closed, so at most sixteen shapes
+/// are on screen at once, the most a layer can render.
 class SeaGlassControls extends StatefulWidget {
   const SeaGlassControls({
     required this.accentIndex,
     required this.tone,
     required this.finish,
     required this.wallpaper,
+    required this.shape,
+    required this.shine,
+    required this.clarity,
+    required this.material,
+    required this.colorStrength,
     required this.onAccent,
     required this.onTone,
     required this.onFinish,
     required this.onWallpaper,
+    required this.onShape,
+    required this.onShine,
+    required this.onClarity,
+    required this.onMaterial,
+    required this.onColorStrength,
     this.top = false,
     super.key,
   });
@@ -36,10 +49,20 @@ class SeaGlassControls extends StatefulWidget {
   final ShowcaseTone tone;
   final ShowcaseFinish finish;
   final ShowcaseWallpaper wallpaper;
+  final ShowcaseShape shape;
+  final ShowcaseShine shine;
+  final double clarity;
+  final ShowcaseMaterial material;
+  final double colorStrength;
   final ValueChanged<int> onAccent;
   final ValueChanged<ShowcaseTone> onTone;
   final ValueChanged<ShowcaseFinish> onFinish;
   final ValueChanged<ShowcaseWallpaper> onWallpaper;
+  final ValueChanged<ShowcaseShape> onShape;
+  final ValueChanged<ShowcaseShine> onShine;
+  final ValueChanged<double> onClarity;
+  final ValueChanged<ShowcaseMaterial> onMaterial;
+  final ValueChanged<double> onColorStrength;
 
   @override
   State<SeaGlassControls> createState() => _SeaGlassControlsState();
@@ -50,10 +73,12 @@ class _SeaGlassControlsState extends State<SeaGlassControls>
   late final AnimationController _palette = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 720),
+    reverseDuration: const Duration(milliseconds: 380),
   );
   late final AnimationController _style = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 420),
+    reverseDuration: const Duration(milliseconds: 240),
   );
 
   static const _fabSize = 60.0;
@@ -64,12 +89,11 @@ class _SeaGlassControlsState extends State<SeaGlassControls>
   static const _blendAtRest = 8.0;
   static const _blendInFlight = 30.0;
 
-  /// The palette as two arcs from the left of the button to above it: the
-  /// first colors on the inner arc, the rest on the outer one.
-  static const _innerCount = 4;
-  static const _innerRadius = 88.0;
-  static const _innerSize = 44.0;
-  static const _outerRadius = 152.0;
+  /// The palette as three arcs from the left of the button to above it
+  /// (below it at the top): count, radius and pebble size of each, from the
+  /// inside out.
+  static const _arcs = [(4, 88.0, 44.0), (5, 142.0, 40.0), (5, 196.0, 38.0)];
+  static const _outerRadius = 196.0;
   static const _outerSize = 38.0;
 
   @override
@@ -83,22 +107,26 @@ class _SeaGlassControlsState extends State<SeaGlassControls>
       controller.status == AnimationStatus.forward ||
       controller.status == AnimationStatus.completed;
 
-  void _togglePalette() {
-    if (_isOpen(_palette)) {
-      _palette.reverse();
-    } else {
-      _style.reverse();
-      _palette.forward();
-    }
-  }
+  void _togglePalette() => _isOpen(_palette)
+      ? _palette.reverse()
+      : _openAfterClosing(_palette, _style);
 
-  void _toggleStyle() {
-    if (_isOpen(_style)) {
-      _style.reverse();
-    } else {
-      _palette.reverse();
-      _style.forward();
+  void _toggleStyle() =>
+      _isOpen(_style) ? _style.reverse() : _openAfterClosing(_style, _palette);
+
+  /// Opens [menu] once [other] has closed, so the two never share the layer.
+  Future<void> _openAfterClosing(
+    AnimationController menu,
+    AnimationController other,
+  ) async {
+    if (other.value > 0) {
+      try {
+        await other.reverse().orCancel;
+      } on TickerCanceled {
+        return;
+      }
     }
+    if (mounted) await menu.forward();
   }
 
   void _closeAll() {
@@ -109,25 +137,30 @@ class _SeaGlassControlsState extends State<SeaGlassControls>
   /// Where pebble [index] settles, relative to the palette button's center,
   /// and its size.
   static (Offset, double) _pebbleSlot(int index, {required bool top}) {
-    final inner = index < _innerCount;
-    final count = inner ? _innerCount : seaGlassPalette.length - _innerCount;
-    final slot = inner ? index : index - _innerCount;
-    // From pointing left (180°) to pointing up (270°), or down (90°) when
-    // the controls sit at the top.
-    final sweep = .5 * slot / (count - 1);
-    final angle = math.pi * (top ? 1 - sweep : 1 + sweep);
-    final radius = inner ? _innerRadius : _outerRadius;
-    return (
-      Offset(math.cos(angle), math.sin(angle)) * radius,
-      inner ? _innerSize : _outerSize,
-    );
+    var slot = index;
+    for (final (count, radius, size) in _arcs) {
+      if (slot >= count) {
+        slot -= count;
+        continue;
+      }
+      // From pointing left (180°) to pointing up (270°), or down (90°) when
+      // the controls sit at the top.
+      final sweep = .5 * slot / (count - 1);
+      final angle = math.pi * (top ? 1 - sweep : 1 + sweep);
+      return (Offset(math.cos(angle), math.sin(angle)) * radius, size);
+    }
+    throw RangeError.index(index, seaGlassPalette, 'index');
   }
 
   @override
   Widget build(BuildContext context) {
     final ink = inkFor(darkWallpaper: widget.wallpaper.dark);
     final accent = seaGlassPalette[widget.accentIndex];
-    final body = widget.tone.body(accent.color);
+    final body = widget.tone.body(
+      accent.color,
+      strength: widget.colorStrength,
+      material: widget.material,
+    );
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
@@ -164,6 +197,12 @@ class _SeaGlassControlsState extends State<SeaGlassControls>
                     width: math.min(size.width - 32, 420),
                     child: _StyleTray(
                       fromTop: top,
+                      maxHeight:
+                          size.height -
+                          safe.vertical -
+                          _topMargin -
+                          _fabSize -
+                          30,
                       progress: Curves.easeOutCubic.transform(styleOpen),
                       ink: ink,
                       accent: accent.color,
@@ -171,9 +210,19 @@ class _SeaGlassControlsState extends State<SeaGlassControls>
                       wallpaper: widget.wallpaper,
                       finish: widget.finish,
                       tone: widget.tone,
+                      shape: widget.shape,
+                      shine: widget.shine,
+                      clarity: widget.clarity,
+                      material: widget.material,
+                      colorStrength: widget.colorStrength,
                       onWallpaper: widget.onWallpaper,
                       onFinish: widget.onFinish,
                       onTone: widget.onTone,
+                      onShape: widget.onShape,
+                      onShine: widget.onShine,
+                      onClarity: widget.onClarity,
+                      onMaterial: widget.onMaterial,
+                      onColorStrength: widget.onColorStrength,
                     ),
                   ),
                 if (open > 0)
@@ -202,6 +251,28 @@ class _SeaGlassControlsState extends State<SeaGlassControls>
                             math.sin(math.pi * open),
                     child: Stack(
                       children: [
+                        if (open == 0)
+                          _place(
+                            buttonCenter -
+                                const Offset(_buttonSize + _buttonGap, 0),
+                            _buttonSize,
+                            _RoundButton(
+                              label:
+                                  widget.material == ShowcaseMaterial.seaGlass
+                                  ? 'Switch to slab glass'
+                                  : 'Switch to sea glass',
+                              icon: widget.material == ShowcaseMaterial.seaGlass
+                                  ? Icons.layers_rounded
+                                  : Icons.water_drop_rounded,
+                              ink: ink,
+                              shape: widget.shape,
+                              onTap: () => widget.onMaterial(
+                                widget.material == ShowcaseMaterial.seaGlass
+                                    ? ShowcaseMaterial.slab
+                                    : ShowcaseMaterial.seaGlass,
+                              ),
+                            ),
+                          ),
                         if (open < 1)
                           _place(
                             Offset.lerp(
@@ -214,6 +285,7 @@ class _SeaGlassControlsState extends State<SeaGlassControls>
                               label: 'Style',
                               icon: Icons.wallpaper_rounded,
                               ink: ink,
+                              shape: widget.shape,
                               onTap: _toggleStyle,
                             ),
                           ),
@@ -230,6 +302,7 @@ class _SeaGlassControlsState extends State<SeaGlassControls>
                                 : Icons.palette_rounded,
                             ink: inkOn(body),
                             body: body,
+                            shape: widget.shape,
                             turns: open * .25,
                             onTap: _togglePalette,
                           ),
@@ -251,13 +324,18 @@ class _SeaGlassControlsState extends State<SeaGlassControls>
     final start = .3 * index / count;
     final local = ((open - start) / .7).clamp(0.0, 1.0);
     final (slot, size) = _pebbleSlot(index, top: widget.top);
-    final color = widget.tone.body(seaGlassPalette[index].color);
+    final color = widget.tone.body(
+      seaGlassPalette[index].color,
+      strength: widget.colorStrength,
+      material: widget.material,
+    );
     return _place(
       fabCenter + slot * Curves.easeOutBack.transform(local),
       14 + (size - 14) * Curves.easeOutCubic.transform(local),
       _Pebble(
         name: seaGlassPalette[index].name,
         body: color,
+        shape: widget.shape,
         selected: index == widget.accentIndex,
         onTap: () => widget.onAccent(index),
       ),
@@ -279,6 +357,7 @@ class _RoundButton extends StatelessWidget {
     required this.label,
     required this.icon,
     required this.ink,
+    required this.shape,
     required this.onTap,
     this.body,
     this.turns = 0,
@@ -287,6 +366,7 @@ class _RoundButton extends StatelessWidget {
   final String label;
   final IconData icon;
   final Color ink;
+  final ShowcaseShape shape;
   final VoidCallback onTap;
 
   /// The body color; frosted white glass without one.
@@ -304,7 +384,7 @@ class _RoundButton extends StatelessWidget {
         onTap: onTap,
         child: LiquidStretch.seaGlass(
           child: LiquidGlass.grouped(
-            shape: const LiquidOval(),
+            shape: pebbleOutline(context, shape, seedOf(label)),
             appearance: body == null
                 ? null
                 : LiquidGlassAppearance.seaGlass(color: body),
@@ -327,12 +407,14 @@ class _Pebble extends StatelessWidget {
   const _Pebble({
     required this.name,
     required this.body,
+    required this.shape,
     required this.selected,
     required this.onTap,
   });
 
   final String name;
   final Color body;
+  final ShowcaseShape shape;
   final bool selected;
   final VoidCallback onTap;
 
@@ -347,7 +429,7 @@ class _Pebble extends StatelessWidget {
         onTap: onTap,
         child: LiquidStretch.seaGlass(
           child: LiquidGlass.grouped(
-            shape: const LiquidOval(),
+            shape: pebbleOutline(context, shape, seedOf(name)),
             appearance: LiquidGlassAppearance.seaGlass(color: body),
             shadows: SeaGlassFinish.shadows(body, elevation: 4),
             // Small pebbles are thin, so over a saturated wallpaper they
@@ -384,14 +466,15 @@ class _Pebble extends StatelessWidget {
   }
 }
 
-/// A frosted tray with the wallpaper, finish and tone.
+/// A frosted tray with the wallpaper, finish, tone, shape and shine.
 ///
-/// The selected finish and tone sit on pebbles of the chosen sea glass.
-/// Shapes in one layer merge rather than stack, so the pebbles have a layer
-/// of their own inside the tray, which samples the tray's glass beneath them.
+/// The selected options sit on pebbles of the chosen sea glass. Shapes in
+/// one layer merge rather than stack, so the pebbles have a layer of their
+/// own inside the tray, which samples the tray's glass beneath them.
 class _StyleTray extends StatelessWidget {
   const _StyleTray({
     required this.fromTop,
+    required this.maxHeight,
     required this.progress,
     required this.ink,
     required this.accent,
@@ -399,13 +482,26 @@ class _StyleTray extends StatelessWidget {
     required this.wallpaper,
     required this.finish,
     required this.tone,
+    required this.shape,
+    required this.shine,
+    required this.clarity,
+    required this.material,
+    required this.colorStrength,
     required this.onWallpaper,
     required this.onFinish,
     required this.onTone,
+    required this.onShape,
+    required this.onShine,
+    required this.onClarity,
+    required this.onMaterial,
+    required this.onColorStrength,
   });
 
   /// Whether the tray drops from buttons above it.
   final bool fromTop;
+
+  /// The tallest the tray may be; its options scroll beyond that.
+  final double maxHeight;
   final double progress;
   final Color ink;
   final Color accent;
@@ -415,9 +511,19 @@ class _StyleTray extends StatelessWidget {
   final ShowcaseWallpaper wallpaper;
   final ShowcaseFinish finish;
   final ShowcaseTone tone;
+  final ShowcaseShape shape;
+  final ShowcaseShine shine;
+  final double clarity;
+  final ShowcaseMaterial material;
+  final double colorStrength;
   final ValueChanged<ShowcaseWallpaper> onWallpaper;
   final ValueChanged<ShowcaseFinish> onFinish;
   final ValueChanged<ShowcaseTone> onTone;
+  final ValueChanged<ShowcaseShape> onShape;
+  final ValueChanged<ShowcaseShine> onShine;
+  final ValueChanged<double> onClarity;
+  final ValueChanged<ShowcaseMaterial> onMaterial;
+  final ValueChanged<double> onColorStrength;
 
   @override
   Widget build(BuildContext context) {
@@ -430,54 +536,124 @@ class _StyleTray extends StatelessWidget {
           shadows: SeaGlassFinish.shadows(frostedWhite),
           child: Opacity(
             opacity: progress,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
-              child: LiquidGlassLayer(
-                settings: LiquidGlassSettings.of(context),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _SectionLabel('Wallpaper', ink),
-                    SizedBox(
-                      height: 86,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: ShowcaseWallpaper.values.length,
-                        separatorBuilder: (_, _) => const SizedBox(width: 8),
-                        itemBuilder: (context, index) {
-                          final option = ShowcaseWallpaper.values[index];
-                          return _WallpaperChip(
-                            wallpaper: option,
-                            accent: accent,
-                            ink: ink,
-                            selected: option == wallpaper,
-                            onTap: () => onWallpaper(option),
-                          );
-                        },
-                      ),
+            // A milky backing keeps the options legible over any wallpaper;
+            // the tray's light frost alone lets busy photos through.
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Color(
+                  ink.computeLuminance() > .5 ? 0x5C0E1820 : 0x7AF2F6F5,
+                ),
+                borderRadius: const BorderRadius.all(Radius.circular(30)),
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: math.max(maxHeight, 160),
+                ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                  child: LiquidGlassLayer(
+                    settings: LiquidGlassSettings.of(context),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _SectionLabel('Glass', ink),
+                        GlassSegmented(
+                          labels: [
+                            for (final m in ShowcaseMaterial.values) m.label,
+                          ],
+                          selected: material.index,
+                          ink: ink,
+                          body: body,
+                          onSelected: (i) =>
+                              onMaterial(ShowcaseMaterial.values[i]),
+                        ),
+                        const SizedBox(height: 14),
+                        _SectionLabel('Wallpaper', ink),
+                        SizedBox(
+                          height: 86,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: ShowcaseWallpaper.values.length,
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(width: 8),
+                            itemBuilder: (context, index) {
+                              final option = ShowcaseWallpaper.values[index];
+                              return _WallpaperChip(
+                                wallpaper: option,
+                                accent: accent,
+                                ink: ink,
+                                selected: option == wallpaper,
+                                onTap: () => onWallpaper(option),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        _SectionLabel('Finish', ink),
+                        GlassSegmented(
+                          labels: [
+                            for (final f in ShowcaseFinish.values) f.label,
+                          ],
+                          selected: finish.index,
+                          ink: ink,
+                          body: body,
+                          onSelected: (i) => onFinish(ShowcaseFinish.values[i]),
+                        ),
+                        const SizedBox(height: 14),
+                        _SectionLabel('Tone', ink),
+                        GlassSegmented(
+                          labels: [
+                            for (final t in ShowcaseTone.values) t.label,
+                          ],
+                          selected: tone.index,
+                          ink: ink,
+                          body: body,
+                          onSelected: (i) => onTone(ShowcaseTone.values[i]),
+                        ),
+                        const SizedBox(height: 14),
+                        _SectionLabel('Shape', ink),
+                        GlassSegmented(
+                          labels: [
+                            for (final s in ShowcaseShape.values) s.label,
+                          ],
+                          selected: shape.index,
+                          ink: ink,
+                          body: body,
+                          onSelected: (i) => onShape(ShowcaseShape.values[i]),
+                        ),
+                        const SizedBox(height: 14),
+                        _SectionLabel('Shine', ink),
+                        GlassSegmented(
+                          labels: [
+                            for (final s in ShowcaseShine.values) s.label,
+                          ],
+                          selected: shine.index,
+                          ink: ink,
+                          body: body,
+                          onSelected: (i) => onShine(ShowcaseShine.values[i]),
+                        ),
+                        const SizedBox(height: 14),
+                        _SectionLabel('Clarity and color', ink),
+                        GlassValueSlider(
+                          label: 'Transparency',
+                          value: clarity,
+                          onChanged: onClarity,
+                          knob: body,
+                          ink: ink,
+                        ),
+                        GlassValueSlider(
+                          label: 'Color',
+                          value: colorStrength,
+                          onChanged: onColorStrength,
+                          knob: body,
+                          ink: ink,
+                        ),
+                        if (RendererBackend.supported)
+                          _RendererSection(ink: ink, body: body),
+                      ],
                     ),
-                    const SizedBox(height: 10),
-                    _SectionLabel('Finish', ink),
-                    _Segmented(
-                      labels: [for (final f in ShowcaseFinish.values) f.label],
-                      selected: finish.index,
-                      ink: ink,
-                      body: body,
-                      onSelected: (i) => onFinish(ShowcaseFinish.values[i]),
-                    ),
-                    const SizedBox(height: 14),
-                    _SectionLabel('Tone', ink),
-                    _Segmented(
-                      labels: [for (final t in ShowcaseTone.values) t.label],
-                      selected: tone.index,
-                      ink: ink,
-                      body: body,
-                      onSelected: (i) => onTone(ShowcaseTone.values[i]),
-                    ),
-                    if (RendererBackend.supported)
-                      _RendererSection(ink: ink, body: body),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -528,7 +704,7 @@ class _RendererSectionState extends State<_RendererSection> {
       children: [
         const SizedBox(height: 14),
         _SectionLabel('Renderer', ink),
-        _Segmented(
+        GlassSegmented(
           labels: [for (final choice in RendererChoice.values) choice.label],
           selected: state.choice.index,
           ink: ink,
@@ -678,14 +854,15 @@ class _WallpaperChip extends StatelessWidget {
 }
 
 /// A segmented control whose selection is a sea glass pebble of [body]
-/// that slides to the chosen segment.
-class _Segmented extends StatelessWidget {
-  const _Segmented({
+/// that slides to the chosen segment. Place it in a [LiquidGlassLayer].
+class GlassSegmented extends StatelessWidget {
+  const GlassSegmented({
     required this.labels,
     required this.selected,
     required this.ink,
     required this.body,
     required this.onSelected,
+    super.key,
   });
 
   final List<String> labels;

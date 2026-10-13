@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart' show Icons;
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'package:liquid_glass_renderer_example/sea_glass_showcase/pages/common.dart';
@@ -170,8 +171,8 @@ class _WeatherPageState extends State<WeatherPage>
   }
 }
 
-/// A sun painted on the wallpaper and a cloud of four sea glass ovals that
-/// drift and merge in front of it.
+/// A sun painted on the wallpaper and a cloud of four puffs of living sea
+/// glass that drift, billow and merge in front of it.
 class _SunAndCloud extends StatefulWidget {
   const _SunAndCloud();
 
@@ -181,10 +182,14 @@ class _SunAndCloud extends StatefulWidget {
 
 class _SunAndCloudState extends State<_SunAndCloud>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _drift = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 9),
-  )..repeat();
+  /// Seconds since the cloud appeared. The puffs drift once around every
+  /// nine seconds, and their outlines billow as living glass.
+  final _time = ValueNotifier<double>(0);
+  late final Ticker _ticker = createTicker(
+    (elapsed) => _time.value = elapsed.inMicroseconds / 1e6,
+  )..start();
+
+  static const _driftPeriod = 9.0;
 
   /// Center, size and drift phase of each puff, in a 190 x 190 box.
   static const _puffs = [
@@ -196,7 +201,8 @@ class _SunAndCloudState extends State<_SunAndCloud>
 
   @override
   void dispose() {
-    _drift.dispose();
+    _ticker.dispose();
+    _time.dispose();
     super.dispose();
   }
 
@@ -213,14 +219,14 @@ class _SunAndCloudState extends State<_SunAndCloud>
         ),
         Positioned.fill(
           child: ShowcaseLayer(
-            child: AnimatedBuilder(
-              animation: _drift,
-              builder: (context, _) => LiquidGlassBlendGroup(
+            child: ValueListenableBuilder(
+              valueListenable: _time,
+              builder: (context, time, _) => LiquidGlassBlendGroup(
                 blend: 26,
                 child: Stack(
                   children: [
-                    for (final (center, size, phase) in _puffs)
-                      _puff(center, size, phase),
+                    for (final (i, (center, size, phase)) in _puffs.indexed)
+                      _puff(center, size, phase, time, i),
                   ],
                 ),
               ),
@@ -231,8 +237,8 @@ class _SunAndCloudState extends State<_SunAndCloud>
     );
   }
 
-  Widget _puff(Offset center, Size size, double phase) {
-    final angle = 2 * math.pi * (_drift.value + phase);
+  Widget _puff(Offset center, Size size, double phase, double time, int i) {
+    final angle = 2 * math.pi * (time / _driftPeriod + phase);
     final c = center + Offset(math.sin(angle) * 7, math.cos(angle) * 4);
     final breathe = 1 + .06 * math.sin(angle * 2);
     final w = size.width * breathe;
@@ -243,7 +249,7 @@ class _SunAndCloudState extends State<_SunAndCloud>
       width: w,
       height: h,
       child: LiquidGlass.grouped(
-        shape: const LiquidOval(),
+        shape: LiquidBlob.alive(time: time * .8, seed: 11 + i),
         appearance: const LiquidGlassAppearance.seaGlass(
           color: Color(0x99F4F8F6),
         ),

@@ -279,52 +279,58 @@ class _GlassCardFace extends StatelessWidget {
           body: body,
           elevation: 9,
           padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text('SEA · GLASS', style: small),
-                  const Spacer(),
-                  Icon(Icons.contactless_rounded, color: ink, size: 26),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Container(
-                width: 42,
-                height: 32,
-                decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.all(Radius.circular(7)),
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFFF6E3A1), Color(0xFFC9A44C)],
-                  ),
-                  border: Border.all(color: const Color(0x55000000), width: .5),
+          child: DefaultTextStyle.merge(
+            style: TextStyle(shadows: haloFor(ink)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text('SEA · GLASS', style: small),
+                    const Spacer(),
+                    Icon(Icons.contactless_rounded, color: ink, size: 26),
+                  ],
                 ),
-              ),
-              const Spacer(),
-              FittedBox(
-                child: Text(
-                  '••••   ••••   ••••   $last4',
-                  style: TextStyle(
-                    color: ink,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 2,
-                    fontFeatures: const [FontFeature.tabularFigures()],
+                const SizedBox(height: 14),
+                Container(
+                  width: 42,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    borderRadius: const BorderRadius.all(Radius.circular(7)),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFFF6E3A1), Color(0xFFC9A44C)],
+                    ),
+                    border: Border.all(
+                      color: const Color(0x55000000),
+                      width: .5,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Text(name.toUpperCase(), style: small),
-                  const Spacer(),
-                  Text('09/29', style: small),
-                ],
-              ),
-            ],
+                const Spacer(),
+                FittedBox(
+                  child: Text(
+                    '••••   ••••   ••••   $last4',
+                    style: TextStyle(
+                      color: ink,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 2,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Text(name.toUpperCase(), style: small),
+                    const Spacer(),
+                    Text('09/29', style: small),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

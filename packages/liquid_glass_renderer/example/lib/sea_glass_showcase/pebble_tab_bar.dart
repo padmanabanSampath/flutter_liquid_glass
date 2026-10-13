@@ -11,7 +11,8 @@ typedef PebbleTab = ({IconData icon, String label});
 /// Every tab is a pebble of one blend group, close enough that neighbors
 /// join through a thin neck of glass. The selected tab swells into a
 /// capsule of the showcase's body color that shows its label, and the glass
-/// flows as the others make room. Its own layer: [tabs] shapes.
+/// flows as the others make room. The pebbles shrink to fit narrow screens.
+/// Its own layer: [tabs] shapes.
 class PebbleTabBar extends StatelessWidget {
   const PebbleTabBar({
     required this.tabs,
@@ -25,34 +26,44 @@ class PebbleTabBar extends StatelessWidget {
   final ValueChanged<int> onSelected;
 
   static const height = 56.0;
+  static const _margin = 16.0;
   static const _gap = 6.0;
   static const _labelWidth = 66.0;
 
   @override
   Widget build(BuildContext context) {
     final style = ShowcaseScope.of(context);
-    return LiquidGlassLayer(
-      settings: style.settings,
-      defaultAppearance: const LiquidGlassAppearance.seaGlass(
-        color: frostedWhite,
-      ),
-      child: LiquidGlassBlendGroup(
-        blend: 14,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (var i = 0; i < tabs.length; i++) ...[
-              if (i > 0) const SizedBox(width: _gap),
-              _Pebble(
-                tab: tabs[i],
-                selected: i == selected,
-                style: style,
-                onTap: () => onSelected(i),
-              ),
-            ],
-          ],
-        ),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final room =
+            constraints.maxWidth -
+            2 * _margin -
+            _labelWidth -
+            _gap * (tabs.length - 1);
+        final size = (room / tabs.length).clamp(40.0, height);
+        return LiquidGlassLayer(
+          settings: style.settings,
+          defaultAppearance: style.frost,
+          child: LiquidGlassBlendGroup(
+            blend: 14,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < tabs.length; i++) ...[
+                  if (i > 0) const SizedBox(width: _gap),
+                  _Pebble(
+                    tab: tabs[i],
+                    size: size,
+                    selected: i == selected,
+                    style: style,
+                    onTap: () => onSelected(i),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -60,12 +71,14 @@ class PebbleTabBar extends StatelessWidget {
 class _Pebble extends StatelessWidget {
   const _Pebble({
     required this.tab,
+    required this.size,
     required this.selected,
     required this.style,
     required this.onTap,
   });
 
   final PebbleTab tab;
+  final double size;
   final bool selected;
   final ShowcaseStyle style;
   final VoidCallback onTap;
@@ -84,13 +97,12 @@ class _Pebble extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 520),
           curve: Curves.easeOutBack,
-          width:
-              PebbleTabBar.height + (selected ? PebbleTabBar._labelWidth : 0),
-          height: PebbleTabBar.height,
+          width: size + (selected ? PebbleTabBar._labelWidth : 0),
+          height: size,
           child: LiquidStretch.seaGlass(
             child: LiquidGlass.grouped(
-              shape: const LiquidRoundedSuperellipse(
-                borderRadius: PebbleTabBar.height / 2,
+              shape: LiquidRoundedSuperellipse(
+                borderRadius: size / 2,
               ),
               appearance: selected
                   ? LiquidGlassAppearance.seaGlass(color: body)
@@ -109,7 +121,7 @@ class _Pebble extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(tab.icon, color: ink, size: 24),
+                      Icon(tab.icon, color: ink, size: size * .43),
                       AnimatedSize(
                         duration: const Duration(milliseconds: 360),
                         curve: Curves.easeOutCubic,
