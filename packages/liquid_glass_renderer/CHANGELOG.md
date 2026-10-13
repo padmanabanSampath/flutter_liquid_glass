@@ -59,13 +59,15 @@
 - **More colors.** `SeaGlassColors.ruby`, `clear` and `mist`.
 - **Google Sea Glass.** A separate preset after Google's Sea Glass concept:
   `LiquidGlassSettings.googleSeaGlass()` with `SeaGlassFinish.google()`
-  renders lit slabs instead of domes. New finish controls, all `0` in the
-  other finishes: `shading` pales the side facing the light and deepens the
-  far side, `lip` adds a deeper band along the far edge, `shadow` casts a
-  crisp shadow tinted by the glass from `elevation` points up (small round
-  pieces also focus a glow of their color into it), and `wobble` sinks the
-  outline in hand-made undulations (full glass only). `GoogleSeaGlass` holds
-  the concept's four glass sets by role.
+  renders thick, milky slabs, lit from straight above by default. New finish
+  controls, all `0` in the other finishes: `shading` shows the body color
+  where the slab is thickest, brightens its thin outline and keeps its rim
+  clear, so content behind shows through, bent by the lens; `glow` lights
+  the edge away from the light, where the light through the slab gathers;
+  `flecks` chips the face like terrazzo; `shadow` casts a soft shadow from
+  `elevation` points up with a band of the glass's color; and `wobble` sinks
+  the outline in hand-made undulations (full glass only). `GoogleSeaGlass`
+  holds the concept's four glass sets by role.
 - **Scene light.** `LiquidGlassSettings.light` (`GlassLight`) is daylight
   along `lightAngle`, or, given a `position`, a lamp that lights each shape
   from its own side and fans shadows out away from itself; with `color`,

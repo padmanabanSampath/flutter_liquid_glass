@@ -106,31 +106,33 @@ class LiquidGlassSettings with Equatable {
     seaGlassFinish: finish,
   );
 
-  /// Google's Sea Glass concept: thick, milky slabs of pastel glass, shaded
-  /// by a light that moves, casting tinted shadows with a glow of colored
-  /// light inside them.
+  /// Google's Sea Glass concept: thick, milky slabs of pastel glass flecked
+  /// like terrazzo, lit by a light that moves and casting soft shadows with
+  /// a band of colored light.
   ///
-  /// Each shape's side facing the [light] is palest and its far side
-  /// deepest, steepest on the rounded rim, with a thin luminous lip along
-  /// the far edge (see [SeaGlassFinish.google]). The glass is nearly opaque,
-  /// so it shows its own color over any backdrop; there is no refraction to
-  /// speak of, no iOS glint and no dark border, and the outlines are
-  /// slightly hand-made.
+  /// Each shape shows its body color where it is thickest; the light
+  /// brightens its thin outline and, most, the side away from the [light],
+  /// where the light that went through it gathers (see
+  /// [SeaGlassFinish.google]). The glass is milky, so it shows its own color
+  /// over any backdrop, but its thin rim is clear: content scrolling behind
+  /// shows through it, bent by the lens. There is no iOS glint and no dark
+  /// border, and the outlines are slightly hand-made.
   ///
-  /// Without a [GlassLight.position] the light comes from [lightAngle], the
-  /// upper left by default, like daylight. Move it with the pointer for the
-  /// concept's "move your pointer to shift the light", or give it a
-  /// position and [GlassLight.reach] for a flashlight. Color shapes with
-  /// [LiquidGlassAppearance.seaGlass] and the colors of a [GoogleSeaGlass]
-  /// set.
+  /// Without a [GlassLight.position] the light comes from [lightAngle],
+  /// straight above by default, as on the concept's phone screens: shapes
+  /// glow along their lower edge and cast their shadows straight down. Turn
+  /// it, or move it with the pointer, for the concept's "move your pointer
+  /// to shift the light", or give it a position and [GlassLight.reach] for a
+  /// flashlight. Color shapes with [LiquidGlassAppearance.seaGlass] and the
+  /// colors of a [GoogleSeaGlass] set.
   factory LiquidGlassSettings.googleSeaGlass({
     SeaGlassFinish finish = const SeaGlassFinish.google(),
     GlassLight light = const GlassLight(),
-    double lightAngle = -1.07,
+    double lightAngle = 0,
     double frost = 1,
   }) => LiquidGlassSettings(
-    refractionHeight: 16,
-    refractionAmount: 4,
+    refractionHeight: 12,
+    refractionAmount: 12,
     refractionFitsShape: false,
     frost: frost,
     highlight: 0,

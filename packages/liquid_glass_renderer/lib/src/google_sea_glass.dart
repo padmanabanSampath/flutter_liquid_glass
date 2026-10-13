@@ -7,8 +7,8 @@ import 'package:liquid_glass_renderer/src/liquid_glass_settings.dart';
 /// plays in a UI.
 ///
 /// The concept cycles through four sets: [original], [beach], [jewel] and
-/// [frost]. Each color is the glass's body as it shows in even light; the
-/// light then pales the side facing it and deepens the far side (see
+/// [frost]. Each color is the glass's body where it is thickest; the light
+/// brightens its thin edges and the side away from it (see
 /// [LiquidGlassSettings.googleSeaGlass]). Pass a color to
 /// [LiquidGlassAppearance.seaGlass].
 class GoogleSeaGlass with Equatable {

@@ -281,8 +281,8 @@ void paintFakeGlassSurface(
           ..setFloats([
             seaGlass.effectiveGloss,
             seaGlass.effectiveShading,
-            seaGlass.effectiveLip,
-            0,
+            seaGlass.effectiveGlow,
+            seaGlass.effectiveFlecks,
           ])
           ..setFloats(_lightUniforms(settings.light, lightPosition, size));
       });

@@ -687,11 +687,11 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
     shader
       ..setFloat(295, _scatteredFrostRadius * devicePixelRatio)
       // Float index 296, after the frost radius: the sea glass gloss, slab
-      // shading and lip.
+      // shading, glow and flecks.
       ..setFloat(296, seaGlass.effectiveGloss)
       ..setFloat(297, seaGlass.effectiveShading)
-      ..setFloat(298, seaGlass.effectiveLip)
-      ..setFloat(299, 0);
+      ..setFloat(298, seaGlass.effectiveGlow)
+      ..setFloat(299, seaGlass.effectiveFlecks);
     _writeLightUniforms(shader);
   }
 

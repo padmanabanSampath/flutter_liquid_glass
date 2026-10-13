@@ -113,7 +113,9 @@ void main() {
       const google = SeaGlassFinish.google();
       expect(google.isEnabled, isTrue);
       expect(google.effectiveShading, 1);
-      expect(google.effectiveLip, greaterThan(0));
+      expect(google.effectiveGlow, 1);
+      expect(google.effectiveFlecks, 1);
+      expect(google.effectiveSparkle, 0);
       expect(google.effectiveShadow, 1);
       expect(google.effectiveElevation, greaterThan(0));
       expect(google.effectiveWobble, greaterThan(0));
@@ -124,7 +126,9 @@ void main() {
         SeaGlassFinish.none(),
       ]) {
         expect(finish.shading, 0);
-        expect(finish.lip, 0);
+        expect(finish.glow, 0);
+        expect(finish.flecks, 0);
+        expect(finish.effectiveFlecks, 0);
         expect(finish.shadow, 0);
         expect(finish.wobble, 0);
         expect(finish.effectiveShadow, 0);
@@ -135,13 +139,15 @@ void main() {
     test('slab controls are clamped and vanish when disabled', () {
       const wild = SeaGlassFinish(
         shading: 3,
-        lip: -1,
+        glow: -1,
+        flecks: 2,
         shadow: 2,
         elevation: -5,
         wobble: 9,
       );
       expect(wild.effectiveShading, 1);
-      expect(wild.effectiveLip, 0);
+      expect(wild.effectiveGlow, 0);
+      expect(wild.effectiveFlecks, 1);
       expect(wild.effectiveShadow, 1);
       expect(wild.effectiveElevation, 0);
       expect(wild.effectiveWobble, 4);
@@ -149,6 +155,7 @@ void main() {
       final disabled = wild.copyWith(strength: 0);
       expect(disabled.effectiveShadow, 0);
       expect(disabled.effectiveWobble, 0);
+      expect(disabled.effectiveFlecks, 0);
     });
 
     test('copyWith and JSON preserve the slab controls', () {
@@ -156,13 +163,15 @@ void main() {
       expect(SeaGlassFinish.fromJson(google.toJson()), google);
       final changed = google.copyWith(
         shading: 0.5,
-        lip: 0.25,
+        glow: 0.25,
+        flecks: 0.6,
         shadow: 0.75,
         elevation: 40,
         wobble: 1.5,
       );
       expect(changed.shading, 0.5);
-      expect(changed.lip, 0.25);
+      expect(changed.glow, 0.25);
+      expect(changed.flecks, 0.6);
       expect(changed.shadow, 0.75);
       expect(changed.elevation, 40);
       expect(changed.wobble, 1.5);
@@ -251,7 +260,11 @@ void main() {
       final settings = LiquidGlassSettings.googleSeaGlass();
       expect(settings.seaGlassFinish, const SeaGlassFinish.google());
       expect(settings.light, const GlassLight());
-      expect(settings.lightAngle, -1.07);
+      // Straight above, as on the concept's phone screens.
+      expect(settings.lightAngle, 0);
+      // The thin rim bends the content behind it.
+      expect(settings.refractionAmount, greaterThan(0));
+      expect(settings.highlight, 0);
       expect(LiquidGlassSettings.fromJson(settings.toJson()), settings);
     });
 
@@ -282,54 +295,67 @@ void main() {
     });
 
     test('a far light casts every shadow along its direction', () {
-      final low = seaGlassCastShadows(settings, body, center, slab).single;
-      final direction = settings.lightDirection;
-      final offset = low.offset;
-      expect(
-        offset.dx * direction.dy - offset.dy * direction.dx,
-        closeTo(0, 1e-6),
-      );
-      expect(offset.dx * direction.dx + offset.dy * direction.dy, isPositive);
+      final turned = settings.copyWith(lightAngle: -1.07);
+      final direction = turned.lightDirection;
+      final shadows = seaGlassCastShadows(turned, body, center, slab);
+      for (final shadow in shadows) {
+        final offset = shadow.offset;
+        expect(
+          offset.dx * direction.dy - offset.dy * direction.dx,
+          closeTo(0, 1e-6),
+        );
+        expect(
+          offset.dx * direction.dx + offset.dy * direction.dy,
+          isPositive,
+        );
+      }
       // Higher glass casts farther.
-      final raised = settings.copyWith(
+      final raised = turned.copyWith(
         seaGlassFinish: const SeaGlassFinish.google().copyWith(elevation: 44),
       );
-      final high = seaGlassCastShadows(raised, body, center, slab).single;
-      expect(high.offset.distance, greaterThan(offset.distance * 1.5));
-      // The shadow is a deeper shade of the glass.
+      final low = shadows.first;
+      final high = seaGlassCastShadows(raised, body, center, slab).first;
+      expect(high.offset.distance, greaterThan(low.offset.distance * 1.5));
+      // The shadow itself is a faint, cool gray.
       expect(low.color.b, greaterThan(low.color.r));
-      expect(low.color.b, lessThan(body.b));
+      expect(low.color.a, lessThan(0.3));
     });
 
     test('a positioned light casts away from itself, farther as it drops', () {
       LiquidGlassSettings lamp(double height) => settings.copyWith(
         light: GlassLight(position: const Offset(100, 200), height: height),
       );
-      final high = seaGlassCastShadows(lamp(600), body, center, slab).single;
-      final low = seaGlassCastShadows(lamp(200), body, center, slab).single;
+      final high = seaGlassCastShadows(lamp(600), body, center, slab).first;
+      final low = seaGlassCastShadows(lamp(200), body, center, slab).first;
       expect(high.offset.dx, isPositive);
       expect(high.offset.dy, closeTo(0, 1e-9));
       expect(low.offset.dx, greaterThan(high.offset.dx));
     });
 
-    test('round pebbles add a glow of their color; slabs do not', () {
+    test('light through the glass lands as a band of its color', () {
+      final band = seaGlassCastShadows(settings, body, center, slab).last;
+      expect(band.color.r, closeTo(body.r * 1.08, 0.01));
+      expect(band.color.b, closeTo(1, 0.01));
+      // Closer to the glass than the shadow, and narrower.
+      final shadow = seaGlassCastShadows(settings, body, center, slab).first;
+      expect(band.offset.distance, lessThan(shadow.offset.distance));
+      expect(band.spreadRadius, isNegative);
+      // Small round pebbles focus more of it.
       final pebble = seaGlassCastShadows(
         settings,
         body,
         center,
         const Size(90, 90),
-      );
-      expect(pebble, hasLength(2));
-      expect(pebble.last.color.b, closeTo(body.b, 0.06));
-      expect(seaGlassCastShadows(settings, body, center, slab), hasLength(1));
+      ).last;
+      expect(pebble.color.a, greaterThan(band.color.a));
     });
 
     test('bright ambient light fades the shadow', () {
       final dim = settings.copyWith(
         light: const GlassLight(intensity: 0.3, ambient: Color(0xFFFFFFFF)),
       );
-      final strong = seaGlassCastShadows(settings, body, center, slab).single;
-      final faint = seaGlassCastShadows(dim, body, center, slab).single;
+      final strong = seaGlassCastShadows(settings, body, center, slab).first;
+      final faint = seaGlassCastShadows(dim, body, center, slab).first;
       expect(faint.color.a, lessThan(strong.color.a / 2));
     });
 
@@ -345,7 +371,7 @@ void main() {
 
   group('rendering', () {
     testWidgets(
-      'the side facing the light is paler than the far side',
+      'light gathers on the side away from it',
       (tester) async {
         // Mean luminance just inside each short side, away from the
         // corners.
@@ -359,11 +385,12 @@ void main() {
           return (_meanLuminance(pixel, left), _meanLuminance(pixel, right));
         }
 
-        // Light shining rightward comes from the left, and the reverse.
+        // Light shining rightward comes from the left and glows on the
+        // right, and the reverse.
         final (fromLeftL, fromLeftR) = await sides(-math.pi / 2);
         final (fromRightL, fromRightR) = await sides(math.pi / 2);
-        expect(fromLeftL, greaterThan(fromLeftR + 6));
-        expect(fromRightR, greaterThan(fromRightL + 6));
+        expect(fromLeftR, greaterThan(fromLeftL + 6));
+        expect(fromRightL, greaterThan(fromRightR + 6));
       },
       skip: skipProperGlassTests,
     );
@@ -386,8 +413,69 @@ void main() {
           return _meanLuminance(pixel, left) - _meanLuminance(pixel, right);
         }
 
-        expect(await leftMinusRight(const Offset(-200, 70)), greaterThan(6));
-        expect(await leftMinusRight(const Offset(440, 70)), lessThan(-6));
+        // The side away from the light glows.
+        expect(await leftMinusRight(const Offset(-200, 70)), lessThan(-6));
+        expect(await leftMinusRight(const Offset(440, 70)), greaterThan(6));
+      },
+      skip: skipProperGlassTests,
+    );
+
+    testWidgets(
+      'the thin rim is clear and the middle milky',
+      (tester) async {
+        Future<List<int> Function(double, double)> over(Color backdrop) =>
+            _render(
+              tester,
+              _scene(_google(), [
+                _tile(),
+              ], backdrop: ColoredBox(color: backdrop)),
+            );
+        final white = await over(Colors.white);
+        final black = await over(Colors.black);
+        // How much of the backdrop comes through: a point on the rim, just
+        // inside the outline, and the middle.
+        double through(double x, double y) =>
+            _luminance(white(x, y)) - _luminance(black(x, y));
+        expect(through(21.5, 70), greaterThan(through(120, 70) + 60));
+        expect(through(120, 70), lessThan(80));
+      },
+      skip: skipProperGlassTests,
+    );
+
+    testWidgets(
+      'flecks chip the face in darker and lighter bits',
+      (tester) async {
+        Future<List<double>> face(double flecks) async {
+          final pixel = await _render(
+            tester,
+            _scene(
+              LiquidGlassSettings.googleSeaGlass(
+                finish: const SeaGlassFinish.google().copyWith(
+                  shadow: 0,
+                  wobble: 0,
+                  flecks: flecks,
+                ),
+              ),
+              [_tile()],
+            ),
+          );
+          return [
+            for (var y = 60.0; y < 80; y += 0.5)
+              for (var x = 60.0; x < 180; x += 0.5) _luminance(pixel(x, y)),
+          ];
+        }
+
+        final plain = await face(0);
+        final flecked = await face(1);
+        var darker = 0;
+        var lighter = 0;
+        for (var i = 0; i < plain.length; i++) {
+          if (flecked[i] < plain[i] - 8) darker++;
+          if (flecked[i] > plain[i] + 6) lighter++;
+        }
+        // A few percent of the face each, as on the concept's glass.
+        expect(darker / plain.length, inInclusiveRange(0.01, 0.15));
+        expect(lighter / plain.length, inInclusiveRange(0.005, 0.15));
       },
       skip: skipProperGlassTests,
     );

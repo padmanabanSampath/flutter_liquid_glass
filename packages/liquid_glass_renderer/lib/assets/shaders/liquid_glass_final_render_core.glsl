@@ -81,8 +81,8 @@ uniform vec4 uSeaGlassShapes[32];
 // Radius in device pixels of the disc the sea glass frost scatters its
 // backdrop samples over, in place of a blur pass; 0 without.
 uniform float uSeaGlassFrostRadius;
-// Sea glass gloss, slab shading and lip (SeaGlassFinish.gloss, shading,
-// lip) in xyz; w unused.
+// Sea glass gloss, slab shading, glow and flecks (SeaGlassFinish.gloss,
+// shading, glow, flecks).
 uniform vec4 uSeaGlassGloss;
 // The light that shades sea glass slabs (GlassLight), in matte device
 // pixels:
@@ -655,14 +655,15 @@ vec2 seaGlassShadeDirection(vec4 box) {
     );
 }
 
-// The slab lighting (slabLighting) of the shape whose box and frame are
-// given, at local, its own frame's position of this pixel.
-float seaGlassSlabLighting(
+// The slab shading (slabShading) of the shape whose box and frame are
+// given, at local, its own frame's position of this pixel, inward device
+// pixels inside the outline, whose outward normal is normal.
+vec2 seaGlassSlabShading(
     vec2 local,
     vec4 box,
     vec4 frame,
     vec2 normal,
-    float edge
+    float inward
 ) {
     float distance = max(length(seaGlassTowardLight(box)), 1e-6);
     vec2 shade = seaGlassShadeDirection(box);
@@ -675,13 +676,13 @@ float seaGlassSlabLighting(
     float tilt = uSeaGlassLight.z > 0.0
         ? clamp(distance / (0.5 * uSeaGlassLight.z), 0.0, 1.0)
         : 1.0;
-    return slabLighting(
+    return slabShading(
         local / max(box.zw, vec2(1.0)),
         towardLocal,
         dot(normal, shade),
-        edge,
+        inward / uSeaGlassDepth,
         tilt,
-        min(box.z, box.w) / max(max(box.z, box.w), 1e-3)
+        clamp(uSeaGlassGloss.z, 0.0, 1.0)
     );
 }
 
@@ -714,8 +715,7 @@ vec3 seaGlassFace(
     vec2 surfaceNormal,
     float grain,
     float halfMinor,
-    float slab,
-    float lipRim,
+    vec2 slab,
     vec3 illumination,
     out vec3 transmitted
 ) {
@@ -735,21 +735,19 @@ vec3 seaGlassFace(
         0.0,
         1.0
     );
+    float shading = clamp(uSeaGlassGloss.y, 0.0, 1.0);
+    scatter *= mix(
+        1.0,
+        slabEdgeScatter(inwardDistance, uSeaGlassDepth),
+        shading
+    );
     transmitted = backdrop * transmittance * (1.0 - scatter);
     float ambient = mix(0.7, 1.0, clamp(backdropLuminance, 0.0, 1.0));
     vec3 glow = mix(vec3(1.0), transmittance, 0.6) * ambient;
-    float shading = clamp(uSeaGlassGloss.y, 0.0, 1.0);
     if (shading > 0.0) {
-        // A thick milky slab shows its own color, shaded by the light.
+        // A thick milky slab shows its own color, brightened by the light.
         vec3 slabBody = mix(vec3(1.0), bodyColor, density);
-        vec3 lit = slabColor(slabBody, slab);
-        lit = mix(
-            lit,
-            slabLipColor(slabBody),
-            clamp(uSeaGlassGloss.z, 0.0, 1.0) *
-                slabLipBand(inwardDistance, uSeaGlassDepth, lipRim)
-        );
-        glow = mix(glow, lit * illumination, shading);
+        glow = mix(glow, slabColor(slabBody, slab) * illumination, shading);
     }
     vec3 face = transmitted + glow * scatter;
     vec3 pastel = mix(vec3(1.0), pow(bodyColor, vec3(0.4 * density)), 0.85);
@@ -1284,42 +1282,30 @@ void main() {
             mix(vec3(seaGlassLuminance), seaGlassBackdrop, uSaturation),
             vec3(0.0)
         );
-        float slab = 0.0;
-        float lipRim = 0.0;
+        vec2 slab = vec2(0.0);
         vec3 illumination = vec3(1.0);
         if (uSeaGlassGloss.y > 0.0) {
-            float edge = clamp(
-                max(signedEdgeDistance, 0.0) / uSeaGlassDepth,
-                0.0,
-                1.0
-            );
-            slab = seaGlassSlabLighting(
+            float inward = max(signedEdgeDistance, 0.0);
+            slab = seaGlassSlabShading(
                 seaGlassFirst,
                 firstBox,
                 seaGlassFirstFrame,
                 surfaceNormal,
-                edge
+                inward
             );
-            vec2 shade = seaGlassShadeDirection(firstBox);
             if (seaGlassSecondWeight > 0.001) {
                 slab = mix(
                     slab,
-                    seaGlassSlabLighting(
+                    seaGlassSlabShading(
                         seaGlassSecond,
                         secondBox,
                         seaGlassSecondFrame,
                         surfaceNormal,
-                        edge
+                        inward
                     ),
                     seaGlassSecondWeight
                 );
-                shade = mix(
-                    shade,
-                    seaGlassShadeDirection(secondBox),
-                    seaGlassSecondWeight
-                );
             }
-            lipRim = dot(surfaceNormal, shade / max(length(shade), 1e-6));
             illumination = seaGlassIllumination(matteCoord);
         }
         vec3 seaGlassTransmitted;
@@ -1332,7 +1318,6 @@ void main() {
             seaGlassPitSample.z,
             seaGlassHalfMinor,
             slab,
-            lipRim,
             illumination,
             seaGlassTransmitted
         );
@@ -1353,6 +1338,20 @@ void main() {
         signedEdgeDistance,
         surfaceNormal
     );
+    if (uSeaGlassStrength > 0.0 && uSeaGlassGloss.w > 0.0) {
+        vec2 flecks = seaGlassFlecks(seaGlassFirst, uSeaGlassGrainSize, 0.75);
+        if (seaGlassSecondWeight > 0.001) {
+            flecks = mix(
+                flecks,
+                seaGlassFlecks(seaGlassSecond, uSeaGlassGrainSize, 0.75),
+                seaGlassSecondWeight
+            );
+        }
+        litColor = seaGlassFlecked(
+            litColor,
+            flecks * clamp(uSeaGlassGloss.w, 0.0, 1.0) * uSeaGlassStrength
+        );
+    }
     if (uSeaGlassStrength > 0.0 && uSeaGlassSparkle > 0.0) {
         float sparkle = seaGlassSparkle(
             seaGlassFirst,

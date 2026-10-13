@@ -224,7 +224,7 @@ class GoogleSeaGlassPageState extends State<GoogleSeaGlassPage>
     final shift = (pointer.dx - center.dx) / math.max(screen.width, 1);
     return LiquidGlassSettings.googleSeaGlass(
       finish: finish,
-      lightAngle: -1.07 + 0.6 * shift,
+      lightAngle: 0.6 * shift,
       light: GlassLight(
         color: _dusk ? const Color(0xFFFFE2C4) : const Color(0xFFFFFFFF),
         intensity: (_dusk ? 0.86 : 1) * level,

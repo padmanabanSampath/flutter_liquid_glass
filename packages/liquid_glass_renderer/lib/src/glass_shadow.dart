@@ -17,10 +17,10 @@ double glassShadowBlurSupport(double blurRadius) =>
 /// The shadows [settings]' light makes a sea glass shape cast (see
 /// [SeaGlassFinish.shadow]), their offsets in global logical pixels.
 ///
-/// The shadow is a crisp copy of the shape, tinted by the glass, cast away
-/// from the light: farther as the light comes down or moves aside. Small,
-/// rounded pieces focus the light they let through into a glow of the
-/// body's color at the near edge of their shadow; broad slabs do not.
+/// A soft, cool shadow falls away from the light, farther as the glass
+/// stands higher or the light comes down or moves aside. Light that went
+/// through the glass lands just past its edge on that side as a band of the
+/// body's color, brightest under small round pebbles, which focus it.
 /// [center] is the shape's center on screen, [size] its size and [body]
 /// its body color. Empty without a cast shadow.
 @internal
@@ -37,58 +37,54 @@ List<BoxShadow> seaGlassCastShadows(
   final elevation = finish.effectiveElevation;
   if (strength <= 0 || elevation <= 0) return const [];
   final light = settings.light;
-  // Round pebbles are domes: they stand taller than flat slabs, so they
-  // cast longer shadows, and they focus the light they let through into a
-  // glow at the near edge of their shadow.
+  // Round pebbles are domes: they stand taller than flat slabs and focus
+  // the light they let through.
   final pebble =
       _smoothstep(0.6, 0.9, shortSide / math.max(longSide, 1e-3)) *
       (1 - _smoothstep(110, 180, shortSide));
-  final rise = elevation * (1 + 0.45 * pebble);
+  final rise = elevation * (1 + 0.3 * pebble);
   final Offset offset;
   if (light.position case final position?) {
     final height = light.effectiveHeight;
     final lift = math.min(rise, height * 0.5);
     offset = (center - position) * (lift / (height - lift));
   } else {
-    // A far light about 32 degrees above the surface.
-    offset = settings.lightDirection * (rise * 1.6);
+    // A far light high above the surface.
+    offset = settings.lightDirection * (rise * 1.15);
   }
   // A dim light against bright ambient light casts a fainter shadow.
   final lightLevel = light.effectiveIntensity;
   final ambientLevel = light.ambient.computeLuminance();
   final presence = strength * lightLevel / (lightLevel + ambientLevel + 1e-3);
   if (presence <= 0) return const [];
-  double deep(double channel) => math.pow(channel, 1.5).toDouble();
-  final shade = Color.from(
-    alpha: 0.5 * presence,
-    red: deep(body.r) * 0.25,
-    green: deep(body.g) * 0.25,
-    blue: deep(body.b) * 0.25,
-  );
   final reach = offset.distance;
-  final shadows = [
+  final direction = reach > 0 ? offset / reach : Offset.zero;
+  final soft = math.max(rise, reach);
+  double bright(double channel) => math.min(channel * 1.08, 1);
+  return [
     BoxShadow(
-      color: shade,
+      color: Color.from(
+        alpha: 0.19 * presence,
+        red: 0.1,
+        green: 0.14,
+        blue: 0.2,
+      ),
       offset: offset,
-      blurRadius: 3 + reach * 0.1,
+      blurRadius: 0.5 * soft,
+      spreadRadius: -0.2 * soft,
+    ),
+    BoxShadow(
+      color: Color.from(
+        alpha: (0.7 + 0.1 * pebble) * presence,
+        red: bright(body.r),
+        green: bright(body.g),
+        blue: bright(body.b),
+      ),
+      offset: direction * (0.4 * soft),
+      blurRadius: 0.3 * soft,
+      spreadRadius: -0.2 * soft,
     ),
   ];
-  if (pebble > 0 && reach > 0) {
-    shadows.add(
-      BoxShadow(
-        color: Color.from(
-          alpha: 0.9 * pebble * presence,
-          red: math.min(body.r * 1.05, 1),
-          green: math.min(body.g * 1.05, 1),
-          blue: math.min(body.b * 1.05, 1),
-        ),
-        offset: offset * 0.45,
-        blurRadius: 3 + reach * 0.12,
-        spreadRadius: -reach * 0.05,
-      ),
-    );
-  }
-  return shadows;
 }
 
 double _smoothstep(double edge0, double edge1, double x) {
