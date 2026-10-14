@@ -588,6 +588,8 @@ class _StyleTray extends StatelessWidget {
                           onSelected: (i) =>
                               onMaterial(ShowcaseMaterial.values[i]),
                         ),
+                        if (material == ShowcaseMaterial.mineral)
+                          _MineralSection(ink: ink, knob: body),
                         const SizedBox(height: 14),
                         _SectionLabel('Wallpaper', ink),
                         SizedBox(
@@ -692,6 +694,113 @@ class _StyleTray extends StatelessWidget {
                   ),
                 ),
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Mineral glass's own controls: how deep its etch is, how bright its
+/// caustic, and its tint. They change the showcase's style directly.
+class _MineralSection extends StatelessWidget {
+  const _MineralSection({required this.ink, required this.knob});
+
+  final Color ink;
+  final Color knob;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = ShowcaseScope.of(context);
+    void restyle(ShowcaseStyle Function(ShowcaseStyle style) change) =>
+        ShowcaseScope.update(context, change);
+    final hint = TextStyle(color: ink.withValues(alpha: .7), fontSize: 12);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 14),
+        _SectionLabel('Mineral', ink),
+        GlassValueSlider(
+          label: 'Frost etch',
+          value: style.etch,
+          onChanged: (etch) => restyle((style) => style.copyWith(etch: etch)),
+          knob: knob,
+          ink: ink,
+        ),
+        GlassValueSlider(
+          label: 'Caustic glow',
+          value: style.caustic,
+          onChanged: (caustic) =>
+              restyle((style) => style.copyWith(caustic: caustic)),
+          knob: knob,
+          ink: ink,
+        ),
+        if (!style.shadows)
+          Text('Turn Shadow on to see the caustic.', style: hint),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final tint in MineralTint.values)
+              _TintSwatch(
+                tint: tint,
+                ink: ink,
+                selected: style.mineralTint == tint,
+                onTap: () =>
+                    restyle((style) => style.copyWith(mineralTint: tint)),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          style.mineralTint?.name ?? 'Palette color: pick a mineral tint',
+          style: hint,
+        ),
+      ],
+    );
+  }
+}
+
+/// A mineral tint's swatch, ringed when [selected].
+class _TintSwatch extends StatelessWidget {
+  const _TintSwatch({
+    required this.tint,
+    required this.ink,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final MineralTint tint;
+  final Color ink;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: tint.name,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 38,
+          height: 38,
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: selected ? ink : ink.withValues(alpha: .2),
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: tint.swatch,
             ),
           ),
         ),

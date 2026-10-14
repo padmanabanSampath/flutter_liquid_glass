@@ -158,7 +158,10 @@ class _SeaGlassShowcasePageState extends State<SeaGlassShowcasePage> {
                           frosting: style.frosting,
                           colorStrength: style.colorStrength,
                           onAccent: (index) => _restyle(
-                            (style) => style.copyWith(accentIndex: index),
+                            (style) => style.copyWith(
+                              accentIndex: index,
+                              paletteTint: true,
+                            ),
                           ),
                           onTone: (tone) =>
                               _restyle((style) => style.copyWith(tone: tone)),

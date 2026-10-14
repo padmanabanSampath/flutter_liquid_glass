@@ -21,6 +21,9 @@ class ShowcaseStyle {
     this.material = ShowcaseMaterial.seaGlass,
     this.shadows = true,
     this.frosting = 0,
+    this.etch = .7,
+    this.caustic = .6,
+    this.mineralTint,
   });
 
   /// Index into [seaGlassPalette]; teal by default.
@@ -60,6 +63,18 @@ class ShowcaseStyle {
   /// made clearer by [clarity] frosts less.
   final double frosting;
 
+  /// How deeply mineral glass is etched, from barely (`0`), showing what is
+  /// beneath it, to a deep, glittering etch that hides it (`1`).
+  final double etch;
+
+  /// How brightly mineral glass focuses light into a band beneath it, from
+  /// a slab's own glow (`0`) to a bright caustic (`1`). Needs [shadows].
+  final double caustic;
+
+  /// The tint of colored mineral glass, or `null` for the palette's
+  /// [accent].
+  final MineralTint? mineralTint;
+
   /// The appearance of frosted glass: switched-off tiles and panels.
   LiquidGlassAppearance get frost =>
       LiquidGlassAppearance.seaGlass(color: material.frost);
@@ -67,9 +82,12 @@ class ShowcaseStyle {
   String get accentName => seaGlassPalette[accentIndex].name;
   Color get accent => seaGlassPalette[accentIndex].color;
 
-  /// The body of colored glass: [accent] in [tone].
-  Color get body =>
-      tone.body(accent, strength: colorStrength, material: material);
+  /// The body of colored glass: [accent] in [tone], or the [mineralTint]
+  /// of mineral glass.
+  Color get body => switch (mineralTint) {
+    final tint? when material == ShowcaseMaterial.mineral => tint.body,
+    _ => tone.body(accent, strength: colorStrength, material: material),
+  };
 
   /// The body of [color] in this style's [tone].
   Color bodyOf(Color color) =>
@@ -77,8 +95,7 @@ class ShowcaseStyle {
 
   /// The settings of every glass layer: the finish, shine and light of our
   /// sea glass, or slab or mineral glass under the same light. Transparency
-  /// clears colored glass, slab glass only a little; for mineral glass it
-  /// and frosting set how deep the etch is.
+  /// clears colored glass, slab glass only a little.
   LiquidGlassSettings get settings => switch (material) {
     ShowcaseMaterial.seaGlass => finish.settings(
       shine: shine,
@@ -114,19 +131,22 @@ class ShowcaseStyle {
     ShowcaseMaterial.mineral => _mineralSettings,
   };
 
-  /// Mineral glass, etched deeper with frosting and shallower with
-  /// transparency, casting its caustic only with shadows on.
+  /// Mineral glass at its [etch] and [caustic], casting its caustic only
+  /// with shadows on; transparency clears its colored glass and frosting
+  /// blurs it more, as for the other glasses.
   LiquidGlassSettings get _mineralSettings {
     final settings = LiquidGlassSettings.mineralSeaGlass(
-      etch: (0.75 - 0.5 * clarity + 0.5 * frosting).clamp(0.0, 1.0),
-      caustic: shadows ? 0.6 : 0,
+      etch: etch,
+      caustic: shadows ? caustic : 0,
       lightAngle: lightAngle,
     );
-    return shadows
-        ? settings
-        : settings.copyWith(
-            seaGlassFinish: settings.seaGlassFinish.copyWith(shadow: 0),
-          );
+    return settings.copyWith(
+      frost: settings.frost + frosting * maxExtraFrost,
+      seaGlassFinish: settings.seaGlassFinish.copyWith(
+        shadow: shadows ? null : 0,
+        colorClarity: clarity,
+      ),
+    );
   }
 
   /// The body of a component that plays [role]: the accent in sea glass;
@@ -163,6 +183,10 @@ class ShowcaseStyle {
     ShowcaseMaterial? material,
     bool? shadows,
     double? frosting,
+    double? etch,
+    double? caustic,
+    MineralTint? mineralTint,
+    bool paletteTint = false,
   }) => ShowcaseStyle(
     accentIndex: accentIndex ?? this.accentIndex,
     tone: tone ?? this.tone,
@@ -177,6 +201,10 @@ class ShowcaseStyle {
     material: material ?? this.material,
     shadows: shadows ?? this.shadows,
     frosting: frosting ?? this.frosting,
+    etch: etch ?? this.etch,
+    caustic: caustic ?? this.caustic,
+    // A palette color chosen by hand colors mineral glass too.
+    mineralTint: paletteTint ? null : mineralTint ?? this.mineralTint,
   );
 
   @override
@@ -194,7 +222,10 @@ class ShowcaseStyle {
       other.colorStrength == colorStrength &&
       other.material == material &&
       other.shadows == shadows &&
-      other.frosting == frosting;
+      other.frosting == frosting &&
+      other.etch == etch &&
+      other.caustic == caustic &&
+      other.mineralTint == mineralTint;
 
   @override
   int get hashCode => Object.hash(
@@ -211,6 +242,9 @@ class ShowcaseStyle {
     material,
     shadows,
     frosting,
+    etch,
+    caustic,
+    mineralTint,
   );
 }
 
