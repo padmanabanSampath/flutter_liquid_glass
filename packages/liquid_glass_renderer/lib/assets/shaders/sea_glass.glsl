@@ -354,3 +354,25 @@ float seaGlassColorClear(vec4 tint, float clarity) {
     float chroma = (high - min(min(c.r, c.g), c.b)) / max(high, 0.001);
     return clarity * smoothstep(0.04, 0.3, chroma) * clamp(tint.a, 0.0, 1.0);
 }
+
+// MARK: Glitter (SeaGlassFinish.glitter)
+
+// The sugary glitter of a deep etch at p: granules about cellSize across,
+// the lowest of two octaves of noise shadowed (x) and the highest catching
+// the light (y), from every side. Antialiased over aa units.
+highp vec2 seaGlassGlitter(highp vec2 p, highp float cellSize, highp float aa) {
+    highp float n = 0.65 * seaGlassNoise(p / cellSize) +
+        0.35 * seaGlassNoise(p / (0.5 * cellSize) + vec2(17.1, 9.3));
+    // The noise changes by about one over a cell.
+    highp float edge = max(aa / cellSize, 0.04);
+    return vec2(
+        1.0 - smoothstep(0.36 - edge, 0.36 + edge, n),
+        smoothstep(0.64 - edge, 0.64 + edge, n)
+    );
+}
+
+// The face with glitter of coverage glitter (seaGlassGlitter) over it.
+vec3 seaGlassGlittered(vec3 face, vec2 glitter) {
+    face = mix(face, face * 0.88, clamp(glitter.x, 0.0, 1.0));
+    return mix(face, mix(face, vec3(1.0), 0.36), clamp(glitter.y, 0.0, 1.0));
+}

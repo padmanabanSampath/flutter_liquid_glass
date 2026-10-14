@@ -5,6 +5,7 @@ import 'package:flutter/painting.dart';
 import 'package:liquid_glass_renderer/src/glass_light.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_appearance.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_settings.dart';
+import 'package:liquid_glass_renderer/src/mineral_sea_glass.dart';
 import 'package:liquid_glass_renderer/src/slab_sea_glass.dart';
 import 'package:meta/meta.dart';
 
@@ -50,6 +51,8 @@ class SeaGlassFinish with Equatable {
     this.elevation = 12,
     this.wobble = 0,
     this.colorClarity = 0,
+    this.caustic = 0,
+    this.glitter = 0,
   });
 
   /// No sea glass: the regular liquid-glass face.
@@ -70,7 +73,9 @@ class SeaGlassFinish with Equatable {
       shadow = 0,
       elevation = 12,
       wobble = 0,
-      colorClarity = 0;
+      colorClarity = 0,
+      caustic = 0,
+      glitter = 0;
 
   /// A heavily tumbled, milkier pebble: more scatter, coarser grain and a
   /// brighter rim. Pair it with a larger [LiquidGlassSettings.frost].
@@ -91,7 +96,9 @@ class SeaGlassFinish with Equatable {
       shadow = 0,
       elevation = 12,
       wobble = 0,
-      colorClarity = 0;
+      colorClarity = 0,
+      caustic = 0,
+      glitter = 0;
 
   /// A barely tumbled shard that is still mostly clear.
   const SeaGlassFinish.clear()
@@ -111,7 +118,9 @@ class SeaGlassFinish with Equatable {
       shadow = 0,
       elevation = 12,
       wobble = 0,
-      colorClarity = 0;
+      colorClarity = 0,
+      caustic = 0,
+      glitter = 0;
 
   /// The milky, candy-like sea glass of the Sea Glass design concept: thick
   /// slabs of nearly opaque pastel glass flecked like terrazzo, brightest
@@ -138,7 +147,43 @@ class SeaGlassFinish with Equatable {
       shadow = 1,
       elevation = 18,
       wobble = 1.5,
-      colorClarity = 0;
+      colorClarity = 0,
+      caustic = 0,
+      glitter = 0;
+
+  /// Mineral sea glass: glass tinted by the minerals in it, its surface
+  /// etched into a sugary glitter, which focuses the light it lets through
+  /// into a bright band on the surface beneath it.
+  ///
+  /// [etch] runs from barely etched glass, clear enough to read what lies
+  /// beneath, bent by the lens (`0`), to a deep etch that glitters and hides
+  /// it (`1`): it raises the scatter, grain, sparkle, flecks, glitter and
+  /// pitting together. [caustic] runs from the inner glow every slab shows
+  /// on the side away from the light (`0`) to a brighter glow and a band of
+  /// light on the surface beneath (`1`).
+  ///
+  /// Use it through [LiquidGlassSettings.mineralSeaGlass], which also frosts
+  /// the backdrop by [etch], and color shapes from [MineralTint].
+  const SeaGlassFinish.mineral({double etch = 0.7, double caustic = 0.6})
+    : strength = 1,
+      depth = 20,
+      scatter = 0.2 + 0.56 * etch,
+      rimGlow = 0.5,
+      grain = 0.15 + 0.6 * etch,
+      grainSize = 0.7,
+      sparkle = 0.1 + 0.8 * etch,
+      pitting = 0.3 + 1.2 * etch,
+      stochasticFrost = true,
+      gloss = 0,
+      shading = 1,
+      glow = 1 + caustic,
+      flecks = 0.15 + 0.85 * etch,
+      shadow = 1,
+      elevation = 12,
+      wobble = 2.5,
+      colorClarity = 0,
+      caustic = caustic,
+      glitter = 0.15 + 0.85 * etch;
 
   /// Restores a finish produced by [toJson].
   factory SeaGlassFinish.fromJson(Object? json) {
@@ -165,6 +210,8 @@ class SeaGlassFinish with Equatable {
       elevation: number('elevation', defaults.elevation),
       wobble: number('wobble', defaults.wobble),
       colorClarity: number('colorClarity', defaults.colorClarity),
+      caustic: number('caustic', defaults.caustic),
+      glitter: number('glitter', defaults.glitter),
     );
   }
 
@@ -248,7 +295,9 @@ class SeaGlassFinish with Equatable {
   final double shading;
 
   /// How brightly the light that went through the slab glows where it
-  /// gathers, on the side away from the light. Only with [shading].
+  /// gathers, on the side away from the light. Only with [shading]. `1` is
+  /// a slab's own glow; up to `2` the glass focuses the light more, as
+  /// mineral glass with a [caustic] does.
   final double glow;
 
   /// How densely the glass is flecked like terrazzo: angular chips, dark
@@ -288,6 +337,19 @@ class SeaGlassFinish with Equatable {
   /// as before.
   final double colorClarity;
 
+  /// How brightly the glass focuses the light it lets through into a band
+  /// on the surface beneath it, past the edge away from the light: a caustic,
+  /// brighter than the surface around it and in the color of the glass. It
+  /// brightens and widens the band of color the [shadow] already carries,
+  /// so it needs a [shadow]. `0`, the default, renders as before.
+  final double caustic;
+
+  /// How densely a deep etch glitters: granules a grain or so across, some
+  /// catching the light and some shadowed, all over the face and moving
+  /// with it. Unlike [sparkle] they glitter from every side. `0`, the
+  /// default, has none.
+  final double glitter;
+
   /// [strength] clamped to `0` to `1`.
   double get effectiveStrength => strength.clamp(0.0, 1.0);
 
@@ -321,8 +383,8 @@ class SeaGlassFinish with Equatable {
   /// [shading] clamped to `0` to `1`.
   double get effectiveShading => shading.clamp(0.0, 1.0);
 
-  /// [glow] clamped to `0` to `1`.
-  double get effectiveGlow => glow.clamp(0.0, 1.0);
+  /// [glow] clamped to `0` to `2`.
+  double get effectiveGlow => glow.clamp(0.0, 2.0);
 
   /// [flecks] clamped to `0` to `1`; `0` when the finish is disabled.
   double get effectiveFlecks => isEnabled ? flecks.clamp(0.0, 1.0) : 0;
@@ -341,6 +403,12 @@ class SeaGlassFinish with Equatable {
   /// disabled.
   double get effectiveColorClarity =>
       isEnabled ? colorClarity.clamp(0.0, 1.0) : 0;
+
+  /// [caustic] clamped to `0` to `1`; `0` when the finish is disabled.
+  double get effectiveCaustic => isEnabled ? caustic.clamp(0.0, 1.0) : 0;
+
+  /// [glitter] clamped to `0` to `1`; `0` when the finish is disabled.
+  double get effectiveGlitter => isEnabled ? glitter.clamp(0.0, 1.0) : 0;
 
   /// Backdrop reach of the pitting, in logical pixels, that the layer must
   /// add to its capture; `0` when the finish is disabled.
@@ -365,6 +433,8 @@ class SeaGlassFinish with Equatable {
     double? elevation,
     double? wobble,
     double? colorClarity,
+    double? caustic,
+    double? glitter,
   }) => SeaGlassFinish(
     strength: strength ?? this.strength,
     depth: depth ?? this.depth,
@@ -383,6 +453,8 @@ class SeaGlassFinish with Equatable {
     elevation: elevation ?? this.elevation,
     wobble: wobble ?? this.wobble,
     colorClarity: colorClarity ?? this.colorClarity,
+    caustic: caustic ?? this.caustic,
+    glitter: glitter ?? this.glitter,
   );
 
   /// A soft shadow tinted by the glass, as colored glass casts on a light
@@ -435,6 +507,8 @@ class SeaGlassFinish with Equatable {
     'elevation': elevation,
     'wobble': wobble,
     if (colorClarity != 0) 'colorClarity': colorClarity,
+    if (caustic != 0) 'caustic': caustic,
+    if (glitter != 0) 'glitter': glitter,
   };
 
   @override
@@ -456,6 +530,8 @@ class SeaGlassFinish with Equatable {
     elevation,
     wobble,
     colorClarity,
+    caustic,
+    glitter,
   ];
 }
 

@@ -87,7 +87,8 @@ uniform vec4 uSeaGlassGloss;
 //                        and the reach of its falloff (w, 0 for none); a
 //                        zero height is a far light along uLightDirection
 //   uSeaGlassLightColor: the light's color times its intensity
-//   uSeaGlassAmbient:    the ambient light
+//   uSeaGlassAmbient:    the ambient light (rgb), and the glitter of a deep
+//                        etch (w, SeaGlassFinish.glitter)
 uniform vec4 uSeaGlassLight;
 uniform vec4 uSeaGlassLightColor;
 uniform vec4 uSeaGlassAmbient;
@@ -194,7 +195,7 @@ vec4 seaGlassSlab(vec2 position, float inward, vec2 normal, float scatter) {
       dot(normal, shade),
       inward / depth,
       tilt,
-      clamp(uSeaGlassGloss.z, 0.0, 1.0)
+      clamp(uSeaGlassGloss.z, 0.0, 2.0)
   );
   float density = clamp(gSeaGlassColor.a, 0.0, 1.0);
   vec3 body = mix(
@@ -275,6 +276,21 @@ vec4 seaGlassOverlay(vec2 position, float inward, float facing, vec2 normal) {
     vec3 dark = seaGlassFlecked(body, vec2(1.0, 0.0));
     overlay = vec4(dark * flecks.x, flecks.x) + overlay * (1.0 - flecks.x);
     float light = 0.28 * flecks.y;
+    overlay = vec4(vec3(light), light) + overlay * (1.0 - light);
+  }
+
+  float glitterAmount = clamp(uSeaGlassAmbient.w, 0.0, 1.0);
+  if (glitterAmount > 0.0) {
+    vec2 glitter = seaGlassGlitter(position, grainSize * 1.6, uPixelSize) *
+        glitterAmount;
+    vec3 body = mix(
+        vec3(1.0),
+        bodyColor,
+        clamp(gSeaGlassColor.a, 0.0, 1.0)
+    );
+    overlay = vec4(body * 0.88 * glitter.x, glitter.x) +
+        overlay * (1.0 - glitter.x);
+    float light = 0.36 * glitter.y;
     overlay = vec4(vec3(light), light) + overlay * (1.0 - light);
   }
 

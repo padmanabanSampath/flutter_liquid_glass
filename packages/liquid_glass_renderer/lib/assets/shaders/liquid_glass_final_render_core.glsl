@@ -90,7 +90,8 @@ uniform vec4 uSeaGlassGloss;
 //                        and the reach of its falloff (w, 0 for none); a
 //                        zero height is a far light along uLightDirection
 //   uSeaGlassLightColor: the light's color times its intensity
-//   uSeaGlassAmbient:    the ambient light
+//   uSeaGlassAmbient:    the ambient light (rgb), and the glitter of a deep
+//                        etch (w, SeaGlassFinish.glitter)
 uniform vec4 uSeaGlassLight;
 uniform vec4 uSeaGlassLightColor;
 uniform vec4 uSeaGlassAmbient;
@@ -684,7 +685,7 @@ vec2 seaGlassSlabShading(
         dot(normal, shade),
         inward / uSeaGlassDepth,
         tilt,
-        clamp(uSeaGlassGloss.z, 0.0, 1.0)
+        clamp(uSeaGlassGloss.z, 0.0, 2.0)
     );
 }
 
@@ -1380,6 +1381,21 @@ void main() {
             materialTint,
             flecks * clamp(uSeaGlassGloss.w, 0.0, 1.0) * uSeaGlassStrength *
                 fleckDepth
+        );
+    }
+    if (uSeaGlassStrength > 0.0 && uSeaGlassAmbient.w > 0.0) {
+        float glitterCell = uSeaGlassGrainSize * 1.6;
+        vec2 glitter = seaGlassGlitter(seaGlassFirst, glitterCell, 0.75);
+        if (seaGlassSecondWeight > 0.001) {
+            glitter = mix(
+                glitter,
+                seaGlassGlitter(seaGlassSecond, glitterCell, 0.75),
+                seaGlassSecondWeight
+            );
+        }
+        litColor = seaGlassGlittered(
+            litColor,
+            glitter * clamp(uSeaGlassAmbient.w, 0.0, 1.0) * uSeaGlassStrength
         );
     }
     if (uSeaGlassStrength > 0.0 && uSeaGlassSparkle > 0.0) {

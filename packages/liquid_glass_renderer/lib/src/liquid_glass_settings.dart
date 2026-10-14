@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:liquid_glass_renderer/src/glass_light.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_appearance.dart';
 import 'package:liquid_glass_renderer/src/liquid_glass_render_scope.dart';
+import 'package:liquid_glass_renderer/src/mineral_sea_glass.dart';
 import 'package:liquid_glass_renderer/src/sea_glass.dart';
 import 'package:liquid_glass_renderer/src/slab_sea_glass.dart';
 import 'package:meta/meta.dart';
@@ -141,6 +142,46 @@ class LiquidGlassSettings with Equatable {
     bevelShadowStrength: 0,
     lightAngle: lightAngle,
     seaGlassFinish: finish,
+    light: light,
+  );
+
+  /// Mineral sea glass: tinted by the minerals in it, etched into a sugary
+  /// glitter, and focusing the light it lets through into a bright band on
+  /// the surface beneath it.
+  ///
+  /// [etch] runs from barely etched glass, clear enough to read what lies
+  /// beneath, bent by its lens (`0`), to a deep etch that glitters and
+  /// hides it (`1`); it sets the [frost] and the finish's scatter, grain,
+  /// sparkle, flecks and pitting together (see [SeaGlassFinish.mineral]).
+  /// [caustic] runs from the glow every slab shows on its side away from
+  /// the light (`0`) to a brighter glow and a band of light on the surface
+  /// beneath (`1`).
+  ///
+  /// The light comes from [lightAngle], straight above by default, so the
+  /// glass glows along its lower edge and casts its shadow and caustic
+  /// straight down; give [light] a position to cast them from a lamp.
+  /// Color shapes with [MineralTint.appearance].
+  factory LiquidGlassSettings.mineralSeaGlass({
+    double etch = 0.7,
+    double caustic = 0.6,
+    double lightAngle = 0,
+    GlassLight light = const GlassLight(),
+    double dispersion = 0,
+  }) => LiquidGlassSettings(
+    refractionHeight: 22,
+    refractionAmount: 12,
+    refractionFitsShape: false,
+    frost: 1.5 + 8.5 * etch.clamp(0.0, 1.0),
+    highlight: 0,
+    dispersion: dispersion,
+    contourStrength: 0,
+    contourDirectionality: 1,
+    bevelShadowStrength: 0,
+    lightAngle: lightAngle,
+    seaGlassFinish: SeaGlassFinish.mineral(
+      etch: etch.clamp(0.0, 1.0),
+      caustic: caustic.clamp(0.0, 1.0),
+    ),
     light: light,
   );
 

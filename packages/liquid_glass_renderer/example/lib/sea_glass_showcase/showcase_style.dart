@@ -76,8 +76,9 @@ class ShowcaseStyle {
       tone.body(color, strength: colorStrength, material: material);
 
   /// The settings of every glass layer: the finish, shine and light of our
-  /// sea glass, or slab glass under the same light. Transparency clears
-  /// colored glass, slab glass only a little.
+  /// sea glass, or slab or mineral glass under the same light. Transparency
+  /// clears colored glass, slab glass only a little; for mineral glass it
+  /// and frosting set how deep the etch is.
   LiquidGlassSettings get settings => switch (material) {
     ShowcaseMaterial.seaGlass => finish.settings(
       shine: shine,
@@ -110,7 +111,23 @@ class ShowcaseStyle {
         // than stretching the whole tile; large cards keep the full lens.
         refractionFitsShape: true,
       ),
+    ShowcaseMaterial.mineral => _mineralSettings,
   };
+
+  /// Mineral glass, etched deeper with frosting and shallower with
+  /// transparency, casting its caustic only with shadows on.
+  LiquidGlassSettings get _mineralSettings {
+    final settings = LiquidGlassSettings.mineralSeaGlass(
+      etch: (0.75 - 0.5 * clarity + 0.5 * frosting).clamp(0.0, 1.0),
+      caustic: shadows ? 0.6 : 0,
+      lightAngle: lightAngle,
+    );
+    return shadows
+        ? settings
+        : settings.copyWith(
+            seaGlassFinish: settings.seaGlassFinish.copyWith(shadow: 0),
+          );
+  }
 
   /// The body of a component that plays [role]: the accent in sea glass;
   /// in slab glass, the concept's color for that role, as every component
@@ -228,15 +245,16 @@ class ShowcaseScope extends InheritedNotifier<ValueNotifier<ShowcaseStyle>> {
 }
 
 /// The drop shadow of a shape of [color]: sea glass's tinted shadow, or
-/// none for slab glass, whose finish casts its own away from the light. Both
-/// would give a slab a colored halo around it as well as its shadow.
+/// none for slab and mineral glass, whose finish casts its own away from
+/// the light. Both would give the glass a colored halo around it as well as
+/// its shadow.
 List<BoxShadow> showcaseShadows(
   BuildContext context,
   Color color, {
   double elevation = 6,
 }) {
   final style = ShowcaseScope.of(context);
-  return style.material.isSlab || !style.shadows
+  return style.material.castsOwnShadow || !style.shadows
       ? const []
       : SeaGlassFinish.shadows(color, elevation: elevation);
 }

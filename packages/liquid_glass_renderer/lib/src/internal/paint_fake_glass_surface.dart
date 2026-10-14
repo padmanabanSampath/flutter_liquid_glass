@@ -131,6 +131,7 @@ List<double> _lightUniforms(
   Offset? position,
   Size size, {
   required double colorClarity,
+  required double glitter,
 }) {
   final intensity = light.effectiveIntensity;
   final center = size.center(Offset.zero);
@@ -154,7 +155,8 @@ List<double> _lightUniforms(
     light.ambient.r,
     light.ambient.g,
     light.ambient.b,
-    0,
+    // The ambient light's fourth float: SeaGlassFinish.glitter.
+    glitter,
   ];
 }
 
@@ -296,6 +298,7 @@ void paintFakeGlassSurface(
               lightPosition,
               size,
               colorClarity: settings.seaGlassFinish.effectiveColorClarity,
+              glitter: settings.seaGlassFinish.effectiveGlitter,
             ),
           );
       });
