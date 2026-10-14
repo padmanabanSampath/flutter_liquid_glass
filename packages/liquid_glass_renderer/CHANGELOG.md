@@ -2,6 +2,17 @@
 
 ### Features
 
+- **Mineral sea glass.** A third sea glass, beside the pebbles and the
+  slabs: `LiquidGlassSettings.mineralSeaGlass(etch:, caustic:)` with
+  `SeaGlassFinish.mineral()`. `etch` runs from barely etched glass that shows
+  the content beneath, bent by its lens, to a deep, glittering etch that
+  hides it; `caustic` focuses the light through the glass into a brighter
+  glow and a band of light on the surface beneath. New finish controls,
+  `0` in every other finish: `glitter` (granules of the etch, lit and
+  shadowed from every side) and `caustic`; `glow` now reaches `2`.
+  `MineralTint` holds six tints with their swatch and body colors. The
+  example adds `lib/mineral_sea_glass_main.dart`, and the sea glass showcase
+  lists Mineral among its glasses.
 - **Sea glass.** A tumbled, frosted, colored glass material.
   `LiquidGlassSettings.seaGlass()` pairs a shallow lens, light frost and a
   soft glint with a `SeaGlassFinish` (`LiquidGlassSettings.seaGlassFinish`):

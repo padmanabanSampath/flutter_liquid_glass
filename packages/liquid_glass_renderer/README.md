@@ -505,6 +505,51 @@ cd packages/liquid_glass_renderer/example
 flutter run -t lib/slab_sea_glass_main.dart --enable-impeller --enable-flutter-gpu
 ```
 
+### Mineral sea glass
+
+| Deep etch | Light etch |
+| --- | --- |
+| ![Glittering seafoam glass hiding the type behind it, a band of light beneath](doc/readme/mineral-sea-glass.jpg) | ![The same glass barely etched, the type showing through, bent](doc/readme/mineral-sea-glass-clear.jpg) |
+
+The third sea glass is tinted by the minerals in it and etched into a sugary
+glitter, and it focuses the light it lets through into a bright band on the
+surface beneath it. Two knobs cover its range:
+
+```dart
+LiquidGlassLayer(
+  settings: LiquidGlassSettings.mineralSeaGlass(etch: 0.8, caustic: 0.7),
+  child: LiquidGlass(
+    shape: const LiquidRoundedSuperellipse(borderRadius: 50),
+    appearance: MineralTint.seafoamJade.appearance,
+    child: const SizedBox(width: 340, height: 100),
+  ),
+)
+```
+
+- `etch` runs from barely etched glass, clear enough to read the content
+  beneath it bent by its lens (`0`), to a deep etch that glitters and hides it
+  (`1`). It sets the frost and the finish's scatter, grain, sparkle, flecks,
+  glitter and pitting together.
+- `caustic` runs from the glow every slab shows on its side away from the
+  light (`0`) to a brighter glow and a band of light, brighter than the
+  surface, in the glass's color beneath it (`1`).
+
+`MineralTint` holds six tints, each a swatch color and the glass body it
+makes: Seafoam Jade, Cerulean Aqua, Amber, Frosted Quartz, Cobalt and
+Driftwood Brown. Two finish controls make this glass, both `0` elsewhere:
+`glitter`, granules of the etch that catch the light or are shadowed from
+every side, and `caustic`, the band of light. Mineral glass also lets `glow`
+go up to `2`, focusing the gathered light. FakeGlass draws the glitter, glow
+and caustic but does not refract.
+
+The example compares it with pebble, slab and liquid glass on a draggable
+pill, and the sea glass showcase lists it among its glasses:
+
+```sh
+cd packages/liquid_glass_renderer/example
+flutter run -t lib/mineral_sea_glass_main.dart --enable-impeller --enable-flutter-gpu
+```
+
 ### Cost
 
 The finish adds no textures. Its per-pixel work runs only while it is

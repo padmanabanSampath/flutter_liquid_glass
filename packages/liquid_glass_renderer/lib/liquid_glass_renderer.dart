@@ -16,6 +16,7 @@ export 'src/liquid_glass_settings.dart' show LiquidGlassSettings;
 export 'src/liquid_glass_visibility.dart' show LiquidGlassVisibility;
 export 'src/liquid_shape.dart';
 export 'src/logging.dart' show LgrLogs;
+export 'src/mineral_sea_glass.dart' show MineralTint;
 export 'src/rendering/liquid_glass_layer.dart' show LiquidGlassLayer;
 export 'src/sea_glass.dart' show SeaGlassColors, SeaGlassFinish;
 export 'src/slab_sea_glass.dart' show SlabSeaGlass;

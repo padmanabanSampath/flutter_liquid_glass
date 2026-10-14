@@ -60,7 +60,14 @@ List<BoxShadow> seaGlassCastShadows(
   final reach = offset.distance;
   final direction = reach > 0 ? offset / reach : Offset.zero;
   final soft = math.max(rise, reach);
-  double bright(double channel) => math.min(channel * 1.08, 1);
+  // A caustic focuses the light into a brighter, wider band, lighter than
+  // the surface around it.
+  final caustic = finish.effectiveCaustic;
+  double bright(double channel) {
+    final lit = math.min(channel * (1.08 + 0.3 * caustic), 1).toDouble();
+    return lit + (1 - lit) * 0.25 * caustic;
+  }
+
   return [
     BoxShadow(
       color: Color.from(
@@ -75,14 +82,14 @@ List<BoxShadow> seaGlassCastShadows(
     ),
     BoxShadow(
       color: Color.from(
-        alpha: (0.7 + 0.1 * pebble) * presence,
+        alpha: math.min(0.7 + 0.1 * pebble + 0.3 * caustic, 1) * presence,
         red: bright(body.r),
         green: bright(body.g),
         blue: bright(body.b),
       ),
-      offset: direction * (0.4 * soft),
-      blurRadius: 0.3 * soft,
-      spreadRadius: -0.2 * soft,
+      offset: direction * ((0.4 + 0.4 * caustic) * soft),
+      blurRadius: (0.3 + 0.5 * caustic) * soft,
+      spreadRadius: (-0.2 + 0.15 * caustic) * soft,
     ),
   ];
 }

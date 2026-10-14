@@ -35,7 +35,8 @@ const frostedWhite = Color(0x59E9F0EC);
 enum ShowcaseMaterial {
   seaGlass('Sea glass'),
   slab('Slab'),
-  clearSlab('Clear slab');
+  clearSlab('Clear slab'),
+  mineral('Mineral');
 
   const ShowcaseMaterial(this.label);
 
@@ -47,10 +48,15 @@ enum ShowcaseMaterial {
     seaGlass => frostedWhite,
     slab => _slabClear,
     clearSlab => _clearSlabClear,
+    mineral => MineralTint.frostedQuartz.body,
   };
 
   /// Whether this is one of the slab glasses.
-  bool get isSlab => this != seaGlass;
+  bool get isSlab => this == slab || this == clearSlab;
+
+  /// Whether the glass's finish casts its own shadow away from the light,
+  /// so its shapes take no drop shadow of their own.
+  bool get castsOwnShadow => this != seaGlass;
 
   /// The glass after this one, for the quick toggle.
   ShowcaseMaterial get next => values[(index + 1) % values.length];

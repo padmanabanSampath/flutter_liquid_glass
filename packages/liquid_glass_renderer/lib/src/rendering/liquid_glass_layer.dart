@@ -729,7 +729,9 @@ class RenderLiquidGlassLayer extends LiquidGlassRenderObject
         ambient.r,
         ambient.g,
         ambient.b,
-        0,
+        // Float index 311, the ambient light's fourth: SeaGlassFinish.
+        // glitter.
+        settings.seaGlassFinish.effectiveGlitter,
       ]);
     });
   }

@@ -277,6 +277,7 @@ class _SeaGlassControlsState extends State<SeaGlassControls>
                                 ShowcaseMaterial.slab => Icons.layers_rounded,
                                 ShowcaseMaterial.clearSlab =>
                                   Icons.blur_on_rounded,
+                                ShowcaseMaterial.mineral => Icons.grain_rounded,
                               },
                               ink: ink,
                               shape: widget.shape,
